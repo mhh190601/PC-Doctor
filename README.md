@@ -8,7 +8,7 @@
 ## ✨ 功能亮点
 
 - 🧹 **一键优化**：清理临时文件、磁盘垃圾、检查流氓软件、管理开机启动项、DNS修复等。
-- 🤖 **AI 智能诊断**：用大白话问电脑问题（如“电脑卡顿怎么办”），本地知识库自动匹配解决方案。
+- 🤖 **AI 智能诊断**：用大白话问电脑问题（如"电脑卡顿怎么办"），本地知识库自动匹配解决方案。
 - 📚 **自学习知识库**：用户可以教它新知识，越用越聪明。
 - 📊 **实用工具箱**：大文件扫描、开机耗时分析、文件夹空间分析、内存优化。
 - 💻 **网速悬浮窗**：实时显示上传/下载速度，可拖拽、半透明、置顶。
@@ -40,3 +40,24 @@ pip install -r requirements.txt
 # 运行程序
 python main.py
 要求 Python 3.7 及以上版本。
+
+🛠️ 技术栈
+模块	技术
+桌面 GUI	Python + Eel
+前端界面	HTML / CSS / JavaScript
+AI 智能体	scikit-learn + jieba（TF-IDF 相似度匹配）
+系统操作	psutil + winreg + ctypes
+知识库	SQLite + 自学习权重调整
+打包	PyInstaller + Inno Setup
+🤝 贡献与反馈
+欢迎任何形式的贡献！如果你有好的电脑问题解决方案，可以：
+
+📝 提交 Pull Request 扩充知识库（knowledge_base.json）
+
+🐛 在 Issues 中提交 Bug 或功能建议
+
+⭐ 点个 Star 支持我继续开发
+
+📄 许可证
+本项目基于 MIT 许可证开源，详情请见 LICENSE 文件。
+
