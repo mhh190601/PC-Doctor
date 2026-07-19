@@ -11,6 +11,7 @@ import tempfile
 import socket
 import threading
 import psutil
+import hashlib
 import learning  # 导入自学习模块
 
 # PyInstaller 打包兼容：确保临时解压目录在路径中
@@ -156,6 +157,20 @@ def check_dns():
     except socket.gaierror:
         return "DNS 解析异常！可尝试将 DNS 修改为 114.114.114.114 或 223.5.5.5。"
 
+import string
+from ctypes import windll
+
+@eel.expose
+def get_drives():
+    """返回系统所有可用盘符列表，如 ['C:', 'D:', 'E:']"""
+    drives = []
+    bitmask = windll.kernel32.GetLogicalDrives()
+    for letter in string.ascii_uppercase:
+        if bitmask & 1:
+            drives.append(f"{letter}:\\")
+        bitmask >>= 1
+    return drives
+
 @eel.expose
 def get_system_status():
     """获取系统状态信息（CPU、内存）"""
@@ -294,6 +309,371 @@ def add_user_knowledge(question, answer):
     learning.add_new_knowledge(question, answer)
     return "新知识已录入，谢谢你的贡献！"
 
+# ================== 综合体检功能 ==================
+
+def get_folder_size(folder_path):
+    total = 0
+    try:
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                try:
+                    total += os.path.getsize(fp)
+                except (OSError, PermissionError):
+                    pass
+    except:
+        pass
+    return total / (1024 * 1024)  # 返回 MB
+
+@eel.expose
+def full_system_scan():
+    score = 100
+    checks = []  # 详细检查项列表
+    issues = []  # 仅包含有问题的项
+    
+    # ---------- 1. 磁盘空间 ----------
+    try:
+        disk_report = check_disk_space()
+        # 分析 disk_report 字符串，提取空间紧张的分区
+        has_low = '空间紧张' in disk_report or '不足' in disk_report
+        if has_low:
+            score -= 15
+            status = 'error'
+            desc = '部分磁盘可用空间低于10%，建议清理。'
+            issues.append({"name": "磁盘空间不足", "level": "error", "desc": desc})
+        else:
+            status = 'ok'
+            desc = '所有磁盘空间充足。'
+        checks.append({
+            "name": "磁盘空间检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "磁盘空间检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 2. 临时文件 ----------
+    try:
+        temp_size = 0
+        import tempfile
+        temp_locations = [tempfile.gettempdir(), os.path.expandvars(r'%SystemRoot%\Temp'), os.path.expandvars(r'%SystemRoot%\Prefetch')]
+        for loc in temp_locations:
+            if os.path.exists(loc):
+                temp_size += get_folder_size(loc)
+        if temp_size > 500:
+            score -= 10
+            status = 'warning'
+            desc = f'临时文件约 {temp_size:.0f} MB，建议清理。'
+            issues.append({"name": "垃圾文件过多", "level": "warning", "desc": desc})
+        else:
+            status = 'ok'
+            desc = f'临时文件约 {temp_size:.0f} MB，状态良好。'
+        checks.append({
+            "name": "垃圾文件检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "垃圾文件检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 3. 启动项 ----------
+    try:
+        startup_info = check_startup_items()
+        startup_count = startup_info.count('HKCU') + startup_info.count('HKLM')
+        if startup_count > 15:
+            score -= 15
+            status = 'warning'
+            desc = f'检测到 {startup_count} 个启动项，可能拖慢开机。'
+            issues.append({"name": "开机启动项过多", "level": "warning", "desc": desc})
+        else:
+            status = 'ok'
+            desc = f'启动项数量正常（{startup_count} 个）。'
+        checks.append({
+            "name": "开机启动项检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "开机启动项检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 4. 流氓软件 ----------
+    try:
+        rogue_result = check_rogue_software()
+        if '发现以下' in rogue_result:
+            score -= 20
+            status = 'error'
+            desc = '发现可疑软件残留，建议处理。'
+            issues.append({"name": "发现流氓软件", "level": "error", "desc": desc})
+        else:
+            status = 'ok'
+            desc = '未发现流氓软件痕迹。'
+        checks.append({
+            "name": "流氓软件检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "流氓软件检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 5. DNS ----------
+    try:
+        dns_result = check_dns()
+        if '异常' in dns_result:
+            score -= 10
+            status = 'warning'
+            desc = 'DNS 解析异常，可能影响上网。'
+            issues.append({"name": "DNS异常", "level": "warning", "desc": desc})
+        else:
+            status = 'ok'
+            desc = 'DNS 解析正常。'
+        checks.append({
+            "name": "DNS 检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "DNS 检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 6. 内存使用率 ----------
+    try:
+        mem = psutil.virtual_memory()
+        mem_percent = mem.percent
+        if mem_percent > 85:
+            score -= 10
+            status = 'warning'
+            desc = f'当前内存使用率 {mem_percent}%，建议关闭不必要程序。'
+            issues.append({"name": "内存占用过高", "level": "warning", "desc": desc})
+        else:
+            status = 'ok'
+            desc = f'内存使用率 {mem_percent}%，正常。'
+        checks.append({
+            "name": "内存使用率检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "内存使用率检查", "status": "warning", "desc": "检测失败"})
+    
+    # ---------- 7. 开机耗时 ----------
+    try:
+        boot_info = get_boot_info()
+        last_boot_time = boot_info.get('last_boot_time', '')
+        if '分钟' in last_boot_time and int(last_boot_time.split('分钟')[0]) > 60:
+            score -= 10
+            status = 'warning'
+            desc = f'上次开机耗时 {last_boot_time}，较慢。'
+            issues.append({"name": "开机速度较慢", "level": "warning", "desc": desc})
+        else:
+            status = 'ok'
+            desc = f'上次开机耗时 {last_boot_time}。'
+        checks.append({
+            "name": "开机耗时检查",
+            "status": status,
+            "desc": desc
+        })
+    except:
+        checks.append({"name": "开机耗时检查", "status": "warning", "desc": "检测失败"})
+    
+    score = max(0, min(100, score))
+    
+    return {
+        "score": score,
+        "issues": issues,   # 仅问题列表
+        "checks": checks    # 所有检查项详情
+    }
+
+# ================== 隐私清理 ==================
+@eel.expose
+def get_privacy_options():
+    """
+    返回可清理的隐私项列表，供前端展示
+    """
+    options = [
+        {
+            "id": "browser_cache",
+            "name": "浏览器缓存 (Chrome/Edge)",
+            "desc": "清理 Chrome 和 Edge 的缓存文件、Cookie、历史记录",
+            "default": True
+        },
+        {
+            "id": "recent_docs",
+            "name": "最近使用的文档记录",
+            "desc": "清除开始菜单和资源管理器中的最近文件记录",
+            "default": True
+        },
+        {
+            "id": "run_history",
+            "name": "运行历史记录",
+            "desc": "清除 Win+R 运行框中输入过的命令历史",
+            "default": True
+        },
+        {
+            "id": "recycle_bin",
+            "name": "清空回收站",
+            "desc": "彻底清空回收站中的所有文件",
+            "default": True
+        },
+        {
+            "id": "wechat_cache",
+            "name": "微信/QQ 缓存",
+            "desc": "清理微信和QQ的图片、视频缓存以及接收的文件",
+            "default": False
+        },
+        {
+            "id": "temp_files",
+            "name": "系统临时文件",
+            "desc": "清理 Windows 临时文件夹（等同于系统优化中的临时文件清理）",
+            "default": True
+        }
+    ]
+    return options
+
+@eel.expose
+def clean_privacy_items(selected_ids):
+    """
+    根据用户勾选的清理项ID，执行相应的清理操作
+    返回清理结果信息
+    """
+    total_files = 0
+    total_size = 0
+    details = []
+
+    def get_dir_size(path):
+        size = 0
+        if os.path.exists(path):
+            for dirpath, _, filenames in os.walk(path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    try:
+                        size += os.path.getsize(fp)
+                    except:
+                        pass
+        return size
+
+    # 浏览器缓存清理 (Chrome 和 Edge 的常见缓存目录)
+    if 'browser_cache' in selected_ids:
+        browsers = {
+            'Chrome': os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\User Data\Default\Cache'),
+            'Edge': os.path.expandvars(r'%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Cache'),
+        }
+        for name, cache_path in browsers.items():
+            if os.path.exists(cache_path):
+                size_before = get_dir_size(cache_path)
+                try:
+                    for f in os.listdir(cache_path):
+                        fp = os.path.join(cache_path, f)
+                        try:
+                            if os.path.isfile(fp):
+                                os.remove(fp)
+                            else:
+                                shutil.rmtree(fp, ignore_errors=True)
+                        except:
+                            pass
+                    size_after = get_dir_size(cache_path)
+                    freed = size_before - size_after
+                    total_files += 1
+                    total_size += freed
+                    details.append(f"清理 {name} 缓存，释放约 {freed / (1024*1024):.1f} MB")
+                except:
+                    details.append(f"清理 {name} 缓存时失败")
+
+    # 最近文档记录
+    if 'recent_docs' in selected_ids:
+        recent = os.path.expandvars(r'%APPDATA%\Microsoft\Windows\Recent')
+        if os.path.exists(recent):
+            count = 0
+            for f in os.listdir(recent):
+                try:
+                    os.remove(os.path.join(recent, f))
+                    count += 1
+                except:
+                    pass
+            total_files += count
+            details.append(f"清理最近文档记录 {count} 条")
+
+    # 运行历史
+    if 'run_history' in selected_ids:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU', 0, winreg.KEY_ALL_ACCESS)
+            count = winreg.QueryInfoKey(key)[1]
+            for _ in range(count):
+                name = winreg.EnumValue(key, 0)[0]
+                if name != 'MRUList':
+                    winreg.DeleteValue(key, name)
+            winreg.DeleteValue(key, 'MRUList')
+            winreg.CloseKey(key)
+            details.append("清理运行历史记录完成")
+            total_files += 1
+        except:
+            details.append("清理运行历史记录失败")
+
+    # 清空回收站
+    if 'recycle_bin' in selected_ids:
+        try:
+            os.system('cmd /c "echo y| rd /s %systemdrive%\\$Recycle.Bin"')
+            details.append("回收站已清空")
+        except:
+            details.append("清空回收站失败")
+
+    # 微信/QQ 缓存
+    if 'wechat_cache' in selected_ids:
+        # 微信
+        wechat_files = os.path.expandvars(r'%USERPROFILE%\Documents\WeChat Files')
+        if os.path.exists(wechat_files):
+            for user in os.listdir(wechat_files):
+                cache_dirs = ['FileStorage/Image', 'FileStorage/Video', 'FileStorage/File']
+                for cd in cache_dirs:
+                    path = os.path.join(wechat_files, user, cd)
+                    if os.path.exists(path):
+                        size_before = get_dir_size(path)
+                        shutil.rmtree(path, ignore_errors=True)
+                        os.makedirs(path, exist_ok=True)
+                        size_after = get_dir_size(path)
+                        freed = size_before - size_after
+                        total_size += freed
+                        total_files += 1
+                        details.append(f"清理微信缓存 {user}/{cd}，释放约 {freed / (1024*1024):.1f} MB")
+        # QQ
+        qq_path = os.path.expandvars(r'%USERPROFILE%\Documents\Tencent Files')
+        if os.path.exists(qq_path):
+            for user in os.listdir(qq_path):
+                cache_dirs = ['Image', 'Video']
+                for cd in cache_dirs:
+                    path = os.path.join(qq_path, user, cd)
+                    if os.path.exists(path):
+                        size_before = get_dir_size(path)
+                        shutil.rmtree(path, ignore_errors=True)
+                        os.makedirs(path, exist_ok=True)
+                        size_after = get_dir_size(path)
+                        freed = size_before - size_after
+                        total_size += freed
+                        total_files += 1
+                        details.append(f"清理QQ缓存 {user}/{cd}，释放约 {freed / (1024*1024):.1f} MB")
+
+    # 系统临时文件
+    if 'temp_files' in selected_ids:
+        from tempfile import gettempdir
+        temp_dirs = [gettempdir(), os.path.expandvars(r'%SystemRoot%\Temp')]
+        for tmp in temp_dirs:
+            if os.path.exists(tmp):
+                for root, dirs, files in os.walk(tmp):
+                    for f in files:
+                        try:
+                            fp = os.path.join(root, f)
+                            s = os.path.getsize(fp)
+                            os.remove(fp)
+                            total_files += 1
+                            total_size += s
+                        except:
+                            pass
+                details.append(f"清理临时文件夹 {tmp}")
+
+    return {
+        "total_files": total_files,
+        "total_size_mb": round(total_size / (1024*1024), 2),
+        "details": details
+    }
+
 # ================== 大文件扫描 & 开机耗时 ==================
 @eel.expose
 def scan_large_files(drive="C:", min_size_mb=50):
@@ -392,39 +772,46 @@ import stat
 
 @eel.expose
 def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
-    """
-    扫描目录树，返回文件夹大小聚合结构
-    max_depth: 扫描深度，避免太深导致性能问题
-    top_n: 每个文件夹只返回大小排名前N的子项
-    """
+    """带调试输出的目录树扫描"""
+    print("\n=== 文件夹大小分析调试 ===")
+    
     def get_size(path):
-        """获取文件或文件夹的总大小（递归）"""
         total = 0
         try:
             if os.path.isfile(path):
                 return os.path.getsize(path)
             elif os.path.isdir(path):
-                for entry in os.scandir(path):
-                    try:
-                        if entry.is_file(follow_symlinks=False):
-                            total += entry.stat().st_size
-                        elif entry.is_dir(follow_symlinks=False):
-                            total += get_size(entry.path)
-                    except (OSError, PermissionError):
-                        continue
+                try:
+                    for entry in os.scandir(path):
+                        try:
+                            if entry.is_file(follow_symlinks=False):
+                                total += entry.stat().st_size
+                            elif entry.is_dir(follow_symlinks=False):
+                                total += get_size(entry.path)
+                        except (OSError, PermissionError):
+                            continue
+                except (OSError, PermissionError):
+                    pass
         except (OSError, PermissionError):
             pass
         return total
 
     def build_tree(current_path, current_depth=0):
-        """构建树结构，只返回top_n子项"""
+        items = []
         try:
-            items = []
             with os.scandir(current_path) as it:
                 for entry in it:
                     try:
                         is_dir = entry.is_dir(follow_symlinks=False)
-                        size = get_size(entry.path) if not is_dir else 0
+                        if entry.name in {'$Recycle.Bin', 'System Volume Information', 'Recovery', 'Config.Msi'}:
+                            continue
+                        if is_dir:
+                            size = get_size(entry.path)
+                        else:
+                            try:
+                                size = entry.stat().st_size
+                            except OSError:
+                                size = 0
                         items.append({
                             'name': entry.name,
                             'path': entry.path,
@@ -435,17 +822,9 @@ def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
                     except (OSError, PermissionError):
                         continue
             
-            # 对于文件夹，计算总大小 = 内部所有文件大小之和
-            for item in items:
-                if item['is_dir']:
-                    total = get_size(item['path'])
-                    item['size_mb'] = round(total / (1024 * 1024), 2)
-            
-            # 按大小降序排序，只保留top_n个最大的
             items.sort(key=lambda x: x['size_mb'], reverse=True)
             items = items[:top_n]
             
-            # 如果未达到最大深度，继续展开文件夹
             if current_depth < max_depth:
                 for item in items:
                     if item['is_dir']:
@@ -455,13 +834,27 @@ def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
         except (OSError, PermissionError):
             return []
 
-    # 确保路径格式正确
     if not os.path.exists(root_path):
+        print("路径不存在")
         return {"error": f"路径 {root_path} 不存在"}
-    
+
     root_name = os.path.basename(root_path.rstrip('\\/')) or root_path
     total_size = get_size(root_path)
-    
+    print(f"根目录: {root_path} , 总大小: {round(total_size / (1024*1024*1024), 2)} GB ({round(total_size/(1024*1024), 1)} MB)")
+
+    # 扫描顶层目录，逐一打印大小
+    try:
+        with os.scandir(root_path) as it:
+            for entry in it:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        sz = get_size(entry.path)
+                        print(f"  {entry.name}: {round(sz/(1024*1024), 1)} MB ({round(sz/(1024*1024*1024), 2)} GB)")
+                except:
+                    pass
+    except Exception as e:
+        print(f"扫描顶层出错: {e}")
+
     tree = {
         'name': root_name,
         'path': root_path,
@@ -469,9 +862,479 @@ def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
         'is_dir': True,
         'children': build_tree(root_path, 0)
     }
+    print("=== 调试输出结束 ===\n")
     return tree
 
+# ================== 系统信息概览 ==================
+import platform
+import subprocess
+
+@eel.expose
+def get_system_info():
+    import subprocess, re
+    info = {}
+    info['os'] = f"{platform.system()} {platform.release()} ({platform.version()})"
+    info['hostname'] = platform.node()
+
+    # CPU 友好名称
+    try:
+        raw_cpu = platform.processor()
+        # 尝试通过 wmic 获取更友好的名称
+        result = subprocess.run(
+            ['wmic', 'cpu', 'get', 'Name'],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if len(lines) > 1:
+            info['cpu'] = lines[1]  # 通常第二行是CPU名称
+        else:
+            info['cpu'] = raw_cpu if raw_cpu else "无法识别"
+    except:
+        info['cpu'] = platform.processor() or "无法识别"
+
+    # 内存
+    try:
+        mem = psutil.virtual_memory()
+        info['memory_total'] = round(mem.total / (1024**3), 1)
+    except:
+        info['memory_total'] = 0
+
+    # 显卡：优先取独显，排除虚拟设备
+    try:
+        result = subprocess.run(
+            ['wmic', 'path', 'win32_videocontroller', 'get', 'name'],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        # 过滤掉虚拟设备、微软基本显示适配器
+        gpu_list = [l for l in lines[1:] if l and 'GameViewer' not in l and 'Virtual' not in l and 'Microsoft Basic' not in l]
+        
+        if gpu_list:
+            # 优先找独显（NVIDIA/AMD）
+            dedicated = [g for g in gpu_list if 'NVIDIA' in g or 'AMD' in g or 'Radeon' in g]
+            if dedicated:
+                info['gpu'] = ', '.join(dedicated)  # 如果有多个独显，都显示
+            else:
+                info['gpu'] = gpu_list[0]  # 只有集显就显示集显
+        else:
+            info['gpu'] = lines[1] if len(lines) > 1 else "未检测到"
+    except:
+        info['gpu'] = "获取失败"
+
+    # 主板型号
+    try:
+        result = subprocess.run(
+            ['wmic', 'baseboard', 'get', 'product'],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        info['motherboard'] = lines[1] if len(lines) > 1 else "未知"
+    except:
+        info['motherboard'] = "未知"
+
+    # 磁盘信息
+    disks = []
+    for part in psutil.disk_partitions():
+        try:
+            # 跳过网络路径、CD-ROM、无法访问的分区
+            if part.mountpoint.startswith('\\\\') or 'cdrom' in part.opts or part.fstype == '':
+                continue
+            usage = psutil.disk_usage(part.mountpoint)
+            disks.append({
+                'device': part.device,
+                'total_gb': round(usage.total / (1024**3), 1),
+                'used_gb': round(usage.used / (1024**3), 1),
+                'free_gb': round(usage.free / (1024**3), 1)
+            })
+        except:
+            pass
+    info['disks'] = disks
+    return info
+
+# ================== 启动项排行分析 ==================
+import winreg
+
+@eel.expose
+def get_startup_ranking():
+    """获取启动项及其影响评级，按文件大小降序排列"""
+    startups = []
+
+    # 1. 扫描注册表中的启动项
+    registry_locations = [
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+    ]
+
+    for hive, key_path in registry_locations:
+        try:
+            key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_READ)
+            i = 0
+            while True:
+                try:
+                    name, value, _ = winreg.EnumValue(key, i)
+                    startups.append((name, value))
+                    i += 1
+                except OSError:
+                    break
+            winreg.CloseKey(key)
+        except Exception:
+            pass
+
+    # 2. 扫描启动文件夹中的快捷方式
+    startup_folders = [
+        os.path.expandvars(r'%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup'),
+        os.path.expandvars(r'%ProgramData%\Microsoft\Windows\Start Menu\Programs\Startup'),
+    ]
+    for folder in startup_folders:
+        if os.path.exists(folder):
+            for item in os.listdir(folder):
+                if item.lower().endswith('.lnk'):
+                    startups.append((item[:-4], os.path.join(folder, item)))
+
+    # 3. 分析每个启动项
+    results = []
+    for name, command in startups:
+        # 提取可执行文件路径（处理带引号和参数的情况）
+        exe_path = command.strip()
+        if exe_path.startswith('"'):
+            end = exe_path.find('"', 1)
+            if end != -1:
+                exe_path = exe_path[1:end]
+        else:
+            exe_path = exe_path.split(' ')[0]
+
+        exe_path = os.path.expandvars(exe_path)  # 扩展环境变量
+        size_mb = 0
+        try:
+            if os.path.isfile(exe_path):
+                size_mb = round(os.path.getsize(exe_path) / (1024 * 1024), 2)
+        except:
+            pass
+
+        # 影响程度评级
+        if size_mb > 200:
+            impact = '高'
+        elif size_mb > 50:
+            impact = '中'
+        else:
+            impact = '低'
+
+        results.append({
+            'name': name,
+            'command': command,
+            'exe_path': exe_path,
+            'size_mb': size_mb,
+            'impact': impact
+        })
+
+    # 按文件大小降序排列
+    results.sort(key=lambda x: x['size_mb'], reverse=True)
+    return results
+
+# ================== 软件卸载助手 ==================
+import winreg
+import subprocess
+import glob
+
+@eel.expose
+def get_installed_software():
+    """获取已安装软件列表，返回名称、版本、大小、卸载命令等"""
+    software_list = []
+    uninstall_keys = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ]
+    for key_path in uninstall_keys:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_READ)
+            for i in range(0, winreg.QueryInfoKey(key)[0]):
+                try:
+                    subkey_name = winreg.EnumKey(key, i)
+                    subkey = winreg.OpenKey(key, subkey_name)
+                    name = ""
+                    version = ""
+                    publisher = ""
+                    uninstall_string = ""
+                    install_location = ""
+                    size_mb = 0
+                    try:
+                        name = winreg.QueryValueEx(subkey, "DisplayName")[0]
+                    except:
+                        continue  # 跳过没有显示名称的项
+                    try:
+                        version = winreg.QueryValueEx(subkey, "DisplayVersion")[0]
+                    except:
+                        pass
+                    try:
+                        publisher = winreg.QueryValueEx(subkey, "Publisher")[0]
+                    except:
+                        pass
+                    try:
+                        uninstall_string = winreg.QueryValueEx(subkey, "UninstallString")[0]
+                    except:
+                        pass
+                    try:
+                        install_location = winreg.QueryValueEx(subkey, "InstallLocation")[0]
+                    except:
+                        pass
+                    try:
+                        # 尝试获取大小（有些软件有 EstimatedSize，单位 KB）
+                        size = winreg.QueryValueEx(subkey, "EstimatedSize")[0]
+                        size_mb = round(int(size) / 1024, 1) if size else 0
+                    except:
+                        pass
+                    # 判断是否为有效的可卸载软件（有卸载命令）
+                    is_valid = bool(uninstall_string)
+                    reg_full_path = f"HKEY_LOCAL_MACHINE\\{key_path}\\{subkey_name}"
+                    
+                    software_list.append({
+                        "name": name,
+                        "version": version,
+                        "publisher": publisher,
+                        "uninstall_string": uninstall_string,
+                        "install_location": install_location,
+                        "size_mb": size_mb,
+                        "is_valid": is_valid,
+                        "reg_key": reg_full_path
+                    })
+                    winreg.CloseKey(subkey)
+                except:
+                    pass
+            winreg.CloseKey(key)
+        except:
+            pass
+    # 按名称排序
+    software_list.sort(key=lambda x: x["name"].lower())
+    return software_list
+
+@eel.expose
+def uninstall_software(uninstall_string, software_name):
+    """执行卸载命令（静默或等待完成），返回卸载是否成功"""
+    try:
+        # 有些卸载命令需要加参数实现静默卸载，这里不做强制，直接执行
+        # 在 Windows 中，通常卸载命令会弹出界面，需要用户交互，我们只能等待
+        process = subprocess.Popen(uninstall_string, shell=True)
+        process.wait()
+        return {"success": True, "message": f"{software_name} 卸载完成。"}
+    except Exception as e:
+        return {"success": False, "message": f"卸载失败: {str(e)}"}
+
+@eel.expose
+def scan_leftovers(software_name, install_location):
+    """扫描残留文件和注册表项"""
+    leftovers = {"files": [], "reg_keys": []}
+    # 1. 常见残留目录
+    search_paths = []
+    if install_location and os.path.exists(install_location):
+        search_paths.append(install_location)
+    # 尝试从软件名推测 AppData 中的目录
+    appdata_local = os.getenv('LOCALAPPDATA')
+    appdata_roaming = os.getenv('APPDATA')
+    programdata = os.getenv('PROGRAMDATA')
+    # 简单搜索包含软件名的文件夹（浅层搜索，避免耗时）
+    for base in [appdata_local, appdata_roaming, programdata]:
+        if base and os.path.exists(base):
+            try:
+                for item in os.listdir(base):
+                    if software_name.lower() in item.lower():
+                        full_path = os.path.join(base, item)
+                        search_paths.append(full_path)
+            except:
+                pass
+    # 收集残留文件列表（只展示顶层和二级文件，避免太多）
+    for sp in set(search_paths):
+        if os.path.exists(sp):
+            for root, dirs, files in os.walk(sp):
+                for f in files:
+                    leftovers["files"].append(os.path.join(root, f))
+                # 只走两层
+                if root.count(os.sep) - sp.count(os.sep) > 1:
+                    dirs.clear()
+                break  # 只显示目录本身和直接子文件，如需深度扫描可去掉break
+    # 2. 注册表残留扫描
+    reg_paths_to_check = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE",
+        r"SOFTWARE\WOW6432Node",
+    ]
+    for reg_path in reg_paths_to_check:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ)
+            for i in range(winreg.QueryInfoKey(key)[0]):
+                try:
+                    subkey_name = winreg.EnumKey(key, i)
+                    if software_name.lower() in subkey_name.lower():
+                        leftovers["reg_keys"].append(f"HKEY_LOCAL_MACHINE\\{reg_path}\\{subkey_name}")
+                except:
+                    pass
+            winreg.CloseKey(key)
+        except:
+            pass
+    return leftovers
+
+@eel.expose
+def clean_leftovers(files_to_delete, reg_keys_to_delete):
+    """删除指定的残留文件和注册表项"""
+    result = {"files_deleted": 0, "reg_deleted": 0, "errors": []}
+    for f in files_to_delete:
+        try:
+            if os.path.isfile(f):
+                os.remove(f)
+                result["files_deleted"] += 1
+            elif os.path.isdir(f):
+                # 小心删除，只删除空目录或直接删除整个残留目录（用户确认过的）
+                shutil.rmtree(f, ignore_errors=True)
+                result["files_deleted"] += 1
+        except Exception as e:
+            result["errors"].append(f"删除文件失败 {f}: {str(e)}")
+    for reg in reg_keys_to_delete:
+        try:
+            # 解析注册表路径 HKEY_LOCAL_MACHINE\SOFTWARE\...
+            parts = reg.split("\\", 1)
+            if len(parts) == 2 and parts[0] == "HKEY_LOCAL_MACHINE":
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, parts[1], 0, winreg.KEY_ALL_ACCESS)
+                winreg.DeleteKey(key, "")
+                winreg.CloseKey(key)
+                result["reg_deleted"] += 1
+        except Exception as e:
+            result["errors"].append(f"删除注册表失败 {reg}: {str(e)}")
+    return result
+
+@eel.expose
+def delete_software_reg_entry(reg_key):
+    """删除指定软件的注册表卸载条目（用于清理已卸载但残留注册表的软件）"""
+    try:
+        parts = reg_key.split("\\", 1)
+        if len(parts) == 2 and parts[0] == "HKEY_LOCAL_MACHINE":
+            # 打开父键并删除子键
+            parent_path, subkey_name = parts[1].rsplit("\\", 1)
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, parent_path, 0, winreg.KEY_ALL_ACCESS)
+            winreg.DeleteKey(key, subkey_name)
+            winreg.CloseKey(key)
+            return {"success": True, "message": "注册表条目已删除。"}
+        else:
+            return {"success": False, "message": "不支持的注册表路径格式。"}
+    except FileNotFoundError:
+        return {"success": False, "message": "该注册表项已不存在。"}
+    except PermissionError:
+        return {"success": False, "message": "权限不足，请以管理员身份运行。"}
+    except Exception as e:
+        return {"success": False, "message": f"删除失败: {str(e)}"}
+
+# ================== 重复文件查找 ==================
+
+def get_file_md5(file_path, chunk_size=8192):
+    """计算文件的 MD5 值，用于判断文件内容是否相同"""
+    md5 = hashlib.md5()
+    try:
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                md5.update(chunk)
+        return md5.hexdigest()
+    except (OSError, PermissionError):
+        return None
+
+@eel.expose
+def find_duplicate_files(drive="C:\\", min_size_mb=1):
+    """
+    扫描指定目录，找出内容完全相同的重复文件
+    min_size_mb: 只扫描大于此大小的文件（避免扫描大量小文件）
+    """
+    min_size = min_size_mb * 1024 * 1024
+    hash_map = {}  # {md5: [file_path1, file_path2, ...]}
+
+    # 跳过的目录
+    skip_dirs = {'$Recycle.Bin', 'System Volume Information', 'Recovery', 'Config.Msi', 'Windows'}
+
+    scanned = 0
+    for root, dirs, files in os.walk(drive):
+        # 跳过系统目录
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
+        for file in files:
+            scanned += 1
+            if scanned % 500 == 0:
+                print(f'[重复文件扫描] 已扫描 {scanned} 个文件...')
+
+            file_path = os.path.join(root, file)
+
+            # 跳过太小的文件
+            try:
+                size = os.path.getsize(file_path)
+                if size < min_size:
+                    continue
+            except (OSError, PermissionError):
+                continue
+
+            # 计算 MD5
+            md5 = get_file_md5(file_path)
+            if md5 is None:
+                continue
+
+            if md5 in hash_map:
+                hash_map[md5].append(file_path)
+            else:
+                hash_map[md5] = [file_path]
+
+    # 只保留有重复的组（至少2个文件）
+    duplicates = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
+
+    # 整理结果
+    results = []
+    for md5, paths in duplicates.items():
+        try:
+            size_mb = round(os.path.getsize(paths[0]) / (1024 * 1024), 2)
+        except:
+            size_mb = 0
+
+        # 计算这组重复文件浪费的空间（保留一份，其余的都是浪费）
+        wasted_mb = round(size_mb * (len(paths) - 1), 2)
+
+        results.append({
+            'md5': md5,
+            'size_mb': size_mb,
+            'count': len(paths),
+            'wasted_mb': wasted_mb,
+            'files': paths
+        })
+
+    # 按浪费空间降序排列
+    results.sort(key=lambda x: x['wasted_mb'], reverse=True)
+
+    print(f'[重复文件扫描] 完成，共扫描 {scanned} 个文件，找到 {len(results)} 组重复')
+    return results[:50]  # 最多返回50组
+
+@eel.expose
+def delete_selected_files(file_list):
+    """删除指定的文件列表"""
+    deleted = 0
+    errors = []
+    for f in file_list:
+        try:
+            os.remove(f)
+            deleted += 1
+        except Exception as e:
+            errors.append(f"删除失败 {f}: {str(e)}")
+    return {"deleted": deleted, "errors": errors}
+
 # ================== 启动 ==================
+import atexit
+import signal
+
+def force_exit(page=None, sockets=None):
+    """强制退出整个 Python 进程（忽略 Eel 传来的参数）"""
+    os._exit(0)
+
+@eel.expose
+def exit_app():
+    force_exit()
+
 if __name__ == '__main__':
     # 启动网速悬浮窗线程（显式从 speed_float 导入，确保 PyInstaller 能检测到）
     from speed_float import start_monitor
@@ -483,4 +1346,20 @@ if __name__ == '__main__':
     if not learning.load_knowledge_data() and os.path.exists('knowledge_base.json'):
         learning.import_from_json('knowledge_base.json')
     
-    eel.start('index.html', size=(900, 700))
+    import traceback
+    # 方案1: 尝试 Chrome 浏览器
+    # 方案2: Edge 浏览器  
+    # 方案3: 系统默认浏览器（最可靠但会有地址栏）
+    for try_mode, try_name in [('chrome', 'Chrome'), ('edge', 'Edge'), (None, '默认浏览器')]:
+        try:
+            kwargs = {'size': (900, 700), 'close_callback': force_exit}
+            if try_mode is not None:
+                kwargs['mode'] = try_mode
+            eel.start('index.html', **kwargs)
+            break  # 如果 start 正常返回（用户关闭窗口），退出循环
+        except Exception as e:
+            print(f"[启动] {try_name} 模式失败: {e}")
+            traceback.print_exc()
+    else:
+        print("\n[致命错误] 所有浏览器模式都失败了，请检查浏览器是否正常安装。")
+        input("按回车键退出...")

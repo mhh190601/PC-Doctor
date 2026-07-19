@@ -38,8 +38,14 @@ class SpeedMonitor:
         self.last_net = psutil.net_io_counters()
         self.last_time = time.time()
         
+        # 绑定关闭协议，防止 Tkinter 窗口关闭时报错
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         # 启动更新循环
         self.update_speed()
+        
+    def on_closing(self):
+        self.root.destroy()
         
     def start_move(self, event):
         self.x = event.x

@@ -78,14 +78,29 @@ def refresh_cache():
     vectorizer, tfidf_matrix = rebuild_vectorizer(knowledge_cache)
 
 def match_best_answer(user_question):
-    """优化匹配：对模糊提问进行提示，不直接返回长答案"""
+    """优化匹配：引入核心关键词加权，精准定位用户意图"""
     global knowledge_cache, vectorizer, tfidf_matrix
     if not knowledge_cache:
         refresh_cache()
     if not knowledge_cache or not vectorizer:
         return None, None, 0.0
 
-    tokenized_input = ' '.join(jieba.cut(user_question))
+    # 1. 先尝试核心关键词匹配（最高优先级）
+    # 提取用户问题中的核心故障词
+    core_keywords = ['蓝屏', '死机', '黑屏', '花屏', '重启', '关机', '卡顿', '卡', '慢', '弹窗', '广告', '没声音', '声音', '网络', '上网', 'C盘', '磁盘', '清理', '卸载', '开机', '蓝屏代码', '报错', '崩溃', '闪退']
+    
+    user_words = set(jieba.cut(user_question))
+    matched_keywords = [kw for kw in core_keywords if kw in user_words]
+    
+    # 如果有核心关键词命中，优先找知识库中包含同样关键词的问题
+    if matched_keywords:
+        for idx, (kid, question, answer, weight) in enumerate(knowledge_cache):
+            if any(kw in question for kw in matched_keywords):
+                # 只要问题里包含任一关键词，直接返回，跳过相似度计算
+                return answer, kid, 1.0  # 返回最高置信度
+
+    # 2. 如果没有关键词命中，回退到原有的 TF-IDF 相似度匹配
+    tokenized_input = ' '.join(user_words)
     input_vec = vectorizer.transform([tokenized_input])
     similarities = cosine_similarity(input_vec, tfidf_matrix).flatten()
     
@@ -93,21 +108,9 @@ def match_best_answer(user_question):
     best_score = similarities[best_index]
     best_id, question, answer, weight = knowledge_cache[best_index]
 
-    # 设定一个比较严格的匹配阈值，比如 0.3
-    # 低于这个分数，说明用户问题和知识库里的已知问题差距较大
     if best_score < 0.3:
         return None, None, best_score
-
-    # 处理"太短"或"太模糊"的提问（例如：少于4个字）
-    # 这些提问虽然匹配到了，但很可能不是用户真正想问的
-    if len(user_question.strip()) < 4:
-        return f"🤔 你想问的是不是「{question}」？请把问题描述得更详细一些，我才能给你更准确的解答。", best_id, best_score
-    
-    # 如果匹配到的答案与问题完全相同，说明是精确命中，直接返回
-    if question == user_question:
-        return answer, best_id, best_score
         
-    # 正常匹配成功
     return answer, best_id, best_score
 
 def record_feedback(knowledge_id, is_helpful, user_question):
