@@ -1,5 +1,0 @@
-eel
-jieba
-scikit-learn
-requests
-beautifulsoup4
