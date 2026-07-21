@@ -4,6 +4,7 @@
 
 import sys
 import os
+import json
 import eel
 import subprocess
 import shutil
@@ -12,6 +13,10 @@ import socket
 import threading
 import psutil
 import hashlib
+import re
+import time
+import urllib.request
+import urllib.error
 import learning  # 导入自学习模块
 
 # PyInstaller 打包兼容：确保临时解压目录在路径中
@@ -190,6 +195,106 @@ import ctypes
 from ctypes import wintypes
 
 @eel.expose
+def is_admin():
+    """检测当前是否以管理员权限运行"""
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except:
+        return False
+
+def _find_nvidia_smi():
+    """查找 nvidia-smi.exe 的完整路径"""
+    paths = [
+        os.path.join(os.environ.get('ProgramFiles', 'C:\\Program Files'), 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
+        os.path.join(os.environ.get('ProgramFiles(x86)', 'C:\\Program Files (x86)'), 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
+        os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'nvidia-smi.exe'),
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    # 搜索 DriverStore
+    try:
+        driver_store = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'DriverStore', 'FileRepository')
+        if os.path.exists(driver_store):
+            for root, dirs, files in os.walk(driver_store):
+                if 'nvidia-smi.exe' in files:
+                    return os.path.join(root, 'nvidia-smi.exe')
+    except:
+        pass
+    return None
+
+@eel.expose
+def get_cpu_temperature():
+    """获取CPU温度（摄氏度），无需管理员权限。返回浮点数或 None"""
+    try:
+        # 方法1: Win32_PerfFormattedData_Counters_ThermalZoneInformation (无需管理员)
+        # Temperature 字段是开尔文温度 (不是十分之一开尔文)
+        result = subprocess.run(
+            ['wmic', 'path', 'Win32_PerfFormattedData_Counters_ThermalZoneInformation',
+             'get', 'Temperature'],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = result.stdout.strip().split('\n')
+        for line in lines[1:]:  # 跳过表头
+            line = line.strip()
+            if line.isdigit():
+                kelvin = int(line)
+                if 200 < kelvin < 400:  # 合理范围: -73°C ~ 127°C
+                    temp_celsius = kelvin - 273.15
+                    return round(temp_celsius, 1)
+    except:
+        pass
+    
+    try:
+        # 方法2: MSAcpi_ThermalZoneTemperature (需要管理员权限)
+        result = subprocess.run(
+            ['wmic', '/namespace:\\\\root\\wmi', 'PATH', 'MSAcpi_ThermalZoneTemperature', 'get', 'CurrentTemperature'],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = result.stdout.strip().split('\n')
+        if len(lines) >= 2:
+            kelvin_tenths = lines[1].strip()
+            if kelvin_tenths.isdigit():
+                temp_celsius = (int(kelvin_tenths) / 10.0) - 273.15
+                if -20 < temp_celsius < 150:
+                    return round(temp_celsius, 1)
+    except:
+        pass
+    return None
+
+_nvidia_smi_path = None
+
+@eel.expose
+def get_gpu_temperature():
+    """获取NVIDIA GPU温度（摄氏度），如果失败返回 None"""
+    global _nvidia_smi_path
+    try:
+        if _nvidia_smi_path is None:
+            _nvidia_smi_path = _find_nvidia_smi()
+        if _nvidia_smi_path is None:
+            return None
+        result = subprocess.run(
+            [_nvidia_smi_path, '--query-gpu=temperature.gpu', '--format=csv,noheader,nounits'],
+            capture_output=True, text=True, timeout=5
+        )
+        temp_str = result.stdout.strip()
+        if temp_str:
+            return round(float(temp_str), 1)
+    except:
+        pass
+    return None
+
+@eel.expose
+def get_temperatures():
+    """获取CPU和GPU温度，返回字典"""
+    cpu_temp = get_cpu_temperature()
+    gpu_temp = get_gpu_temperature()
+    return {
+        'cpu': cpu_temp,
+        'gpu': gpu_temp
+    }
+
+@eel.expose
 def optimize_memory():
     """
     内存优化：清理进程工作集，释放可交换的物理内存。
@@ -232,6 +337,32 @@ def optimize_memory():
         return f"内存优化失败：{str(e)}\n请尝试以管理员身份运行本软件。"
 
 @eel.expose
+def create_system_restore_point(description="电脑医生自动还原点"):
+    """
+    创建系统还原点，需要管理员权限。
+    返回成功或失败信息。
+    """
+    try:
+        # 在创建还原点之前，先启用系统保护（如果未启用）
+        subprocess.run(
+            ['powershell', '-Command', 'Enable-ComputerRestore -Drive "C:\\"'],
+            capture_output=True, timeout=10
+        )
+        # 创建还原点
+        result = subprocess.run(
+            ['powershell', '-Command', f'Checkpoint-Computer -Description "{description}" -RestorePointType "MODIFY_SETTINGS"'],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            return {"success": True, "message": f"系统还原点创建成功！\n描述：{description}"}
+        else:
+            return {"success": False, "message": f"创建失败：{result.stderr}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "创建还原点超时，请重试。"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@eel.expose
 def run_all_optimizations():
     report_parts = []
     report_parts.append("=== 临时文件清理 ===")
@@ -246,6 +377,11 @@ def run_all_optimizations():
     report_parts.append(check_rogue_software())
     report_parts.append("\n=== DNS 检查 ===")
     report_parts.append(check_dns())
+    report_parts.append("\n=== 内存优化 ===")
+    try:
+        report_parts.append(optimize_memory())
+    except Exception as e:
+        report_parts.append(f"内存优化失败：{e}")
     report_parts.append("\n🎉 所有优化项目已完成！")
     return "\n".join(report_parts)
 
@@ -673,6 +809,779 @@ def clean_privacy_items(selected_ids):
         "total_size_mb": round(total_size / (1024*1024), 2),
         "details": details
     }
+
+# ================== 网络诊断 & 修复 ==================
+@eel.expose
+def diagnose_network():
+    """网络诊断：检查连通性、DNS、代理等"""
+    report = []
+    status = "ok"
+
+    # 1. 检查网络适配器状态
+    try:
+        result = subprocess.run(['ipconfig'], capture_output=True, text=True, timeout=5)
+        if 'Media disconnected' in result.stdout or '媒体已断开' in result.stdout:
+            report.append("⚠️ 有网卡未连接（可能正常）。")
+            status = "warning"
+        else:
+            report.append("✅ 网卡状态正常。")
+    except:
+        report.append("❌ 无法获取网卡状态。")
+        status = "error"
+
+    # 2. Ping 百度检查连通性
+    try:
+        ping_result = subprocess.run(['ping', 'www.baidu.com', '-n', '2'], capture_output=True, text=True, timeout=10)
+        if 'TTL=' in ping_result.stdout:
+            match = re.search(r'Average = (\d+)ms', ping_result.stdout)
+            if match:
+                report.append(f"✅ Ping 百度正常，平均延迟 {match.group(1)}ms。")
+            else:
+                report.append("✅ Ping 百度正常。")
+        else:
+            report.append("❌ 无法Ping通百度，请检查网络连接。")
+            status = "error"
+    except:
+        report.append("❌ Ping测试失败。")
+        status = "error"
+
+    # 3. DNS 解析测试
+    try:
+        socket.gethostbyname('www.baidu.com')
+        report.append("✅ DNS解析正常。")
+    except:
+        report.append("❌ DNS解析失败，可能DNS设置有问题。")
+        status = "error"
+
+    # 4. 检查代理设置
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Internet Settings')
+        proxy_enable, _ = winreg.QueryValueEx(key, 'ProxyEnable')
+        if proxy_enable:
+            report.append("⚠️ 系统代理已开启，可能影响网络。")
+            status = "warning"
+        else:
+            report.append("✅ 系统代理未开启。")
+        winreg.CloseKey(key)
+    except:
+        report.append("⚠️ 无法检查代理设置。")
+
+    return {"status": status, "report": "\n".join(report)}
+
+@eel.expose
+def fix_network():
+    """一键修复常见网络问题（需要管理员权限）"""
+    fixes = []
+    try:
+        subprocess.run(['ipconfig', '/release'], capture_output=True, timeout=10)
+        subprocess.run(['ipconfig', '/renew'], capture_output=True, timeout=30)
+        fixes.append("✅ 已释放并更新IP地址。")
+    except:
+        fixes.append("❌ IP更新失败，请手动操作。")
+
+    try:
+        subprocess.run(['ipconfig', '/flushdns'], capture_output=True, timeout=10)
+        fixes.append("✅ 已刷新DNS缓存。")
+    except:
+        fixes.append("❌ DNS刷新失败。")
+
+    try:
+        subprocess.run(['netsh', 'winsock', 'reset'], capture_output=True, timeout=10)
+        fixes.append("✅ 已重置Winsock目录。")
+    except:
+        fixes.append("❌ Winsock重置失败。")
+
+    try:
+        subprocess.run(['netsh', 'int', 'ip', 'reset'], capture_output=True, timeout=10)
+        fixes.append("✅ 已重置TCP/IP协议栈。")
+    except:
+        fixes.append("❌ TCP/IP重置失败。")
+
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Internet Settings', 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, 'ProxyEnable', 0, winreg.REG_DWORD, 0)
+        winreg.CloseKey(key)
+        fixes.append("✅ 已关闭系统代理。")
+    except:
+        fixes.append("⚠️ 无法自动关闭代理，请手动检查。")
+
+    fixes.append("🔔 部分修复需要重启电脑才能生效。")
+    return "\n".join(fixes)
+
+@eel.expose
+def network_speed_test():
+    """简易网络测速：下载+上传测试"""
+    result_parts = []
+
+    # ---------- 下载测试 ----------
+    test_url = "http://speedtest.tele2.net/1MB.zip"
+    try:
+        start = time.time()
+        with urllib.request.urlopen(test_url, timeout=15) as f:
+            data = f.read()
+        elapsed = time.time() - start
+        size_mb = len(data) / (1024 * 1024)
+        speed_mbps = (size_mb * 8) / elapsed
+        result_parts.append(f"⬇️ 下载速度：{speed_mbps:.2f} Mbps（{size_mb:.2f} MB 用时 {elapsed:.2f} 秒）")
+    except Exception as e:
+        result_parts.append(f"⬇️ 下载测速失败：{e}")
+
+    # ---------- 上传测试 ----------
+    upload_url = "http://httpbin.org/post"
+    upload_data = bytearray(1024 * 1024)
+    for i in range(0, len(upload_data), 4):
+        upload_data[i:i+4] = os.urandom(4)
+    try:
+        start = time.time()
+        req = urllib.request.Request(upload_url, data=upload_data, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as f:
+            resp = f.read()
+        elapsed = time.time() - start
+        size_mb = len(upload_data) / (1024 * 1024)
+        speed_mbps = (size_mb * 8) / elapsed
+        result_parts.append(f"⬆️ 上传速度：{speed_mbps:.2f} Mbps（{size_mb:.2f} MB 用时 {elapsed:.2f} 秒）")
+    except Exception as e:
+        result_parts.append(f"⬆️ 上传测速失败：{e} （可尝试使用 speedtest.net 测试完整速度）")
+
+    return "\n".join(result_parts)
+
+# ================== 右键菜单管理 ==================
+
+def _copy_key(src_hive, src_path, dst_hive, dst_path):
+    """递归复制注册表键和值"""
+    src_key = winreg.OpenKey(src_hive, src_path, 0, winreg.KEY_READ)
+    dst_key = winreg.CreateKey(dst_hive, dst_path)
+    i = 0
+    while True:
+        try:
+            name, data, type_ = winreg.EnumValue(src_key, i)
+            winreg.SetValueEx(dst_key, name, 0, type_, data)
+            i += 1
+        except OSError:
+            break
+    j = 0
+    while True:
+        try:
+            sub_name = winreg.EnumKey(src_key, j)
+            _copy_key(src_hive, f"{src_path}\\{sub_name}", dst_hive, f"{dst_path}\\{sub_name}")
+            j += 1
+        except OSError:
+            break
+    winreg.CloseKey(src_key)
+    winreg.CloseKey(dst_key)
+
+def _delete_key(hive, path):
+    """递归删除注册表键"""
+    key = winreg.OpenKey(hive, path, 0, winreg.KEY_ALL_ACCESS)
+    while True:
+        try:
+            sub = winreg.EnumKey(key, 0)
+            _delete_key(hive, f"{path}\\{sub}")
+        except OSError:
+            break
+    winreg.CloseKey(key)
+    winreg.DeleteKey(hive, path)
+
+@eel.expose
+def get_context_menu_items():
+    """获取常用右键菜单项列表（文件、文件夹、桌面背景、驱动器）"""
+    items = []
+    scan_paths = [
+        (winreg.HKEY_CLASSES_ROOT, r"*\shell"),
+        (winreg.HKEY_CLASSES_ROOT, r"Directory\shell"),
+        (winreg.HKEY_CLASSES_ROOT, r"Directory\Background\shell"),
+        (winreg.HKEY_CLASSES_ROOT, r"Drive\shell"),
+    ]
+    for hive, sub_key in scan_paths:
+        try:
+            key = winreg.OpenKey(hive, sub_key, 0, winreg.KEY_READ)
+            i = 0
+            while True:
+                try:
+                    sub_name = winreg.EnumKey(key, i)
+                    full_path = f"{sub_key}\\{sub_name}"
+                    if sub_name.endswith("_disabled_by_pcdoctor"):
+                        i += 1
+                        continue
+                    try:
+                        sub = winreg.OpenKey(hive, full_path, 0, winreg.KEY_READ)
+                        display_name, _ = winreg.QueryValueEx(sub, "")
+                        if not display_name:
+                            display_name = sub_name
+                        winreg.CloseKey(sub)
+                    except:
+                        display_name = sub_name
+
+                    command = ""
+                    try:
+                        cmd_key = winreg.OpenKey(hive, full_path + r"\command", 0, winreg.KEY_READ)
+                        command, _ = winreg.QueryValueEx(cmd_key, "")
+                        winreg.CloseKey(cmd_key)
+                    except:
+                        pass
+
+                    is_system = False
+                    if command:
+                        cmd_lower = command.lower()
+                        if "system32" in cmd_lower or "syswow64" in cmd_lower:
+                            is_system = True
+                    if sub_name.lower() in ["open", "edit", "print", "printto", "runas", "find"]:
+                        is_system = True
+
+                    items.append({
+                        "id": full_path.replace("\\", "/"),
+                        "hive": "HKEY_CLASSES_ROOT",
+                        "path": full_path,
+                        "name": display_name,
+                        "command": command,
+                        "is_system": is_system,
+                        "enabled": True
+                    })
+                    i += 1
+                except OSError:
+                    break
+            winreg.CloseKey(key)
+        except Exception:
+            pass
+    return items
+
+@eel.expose
+def disable_context_menu_item(path):
+    """禁用右键菜单项：备份后删除原键"""
+    try:
+        hive = winreg.HKEY_CLASSES_ROOT
+        backup_hive = winreg.HKEY_CURRENT_USER
+        backup_root = r"Software\PCDoctor\ContextMenuBackup"
+        backup_path = f"{backup_root}\\{path}"
+        try:
+            backup_key = winreg.CreateKey(backup_hive, backup_path)
+            _copy_key(hive, path, backup_hive, backup_path)
+            winreg.CloseKey(backup_key)
+        except:
+            pass
+        _delete_key(hive, path)
+        return {"success": True, "message": f"已禁用 {os.path.basename(path)}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def enable_context_menu_item(path):
+    """启用右键菜单项：从备份恢复"""
+    try:
+        hive = winreg.HKEY_CLASSES_ROOT
+        backup_hive = winreg.HKEY_CURRENT_USER
+        backup_root = r"Software\PCDoctor\ContextMenuBackup"
+        backup_path = f"{backup_root}\\{path}"
+        backup_key = winreg.OpenKey(backup_hive, backup_path, 0, winreg.KEY_READ)
+        winreg.CloseKey(backup_key)
+        _copy_key(backup_hive, backup_path, hive, path)
+        _delete_key(backup_hive, backup_path)
+        return {"success": True, "message": f"已启用 {os.path.basename(path)}"}
+    except Exception as e:
+        return {"success": False, "message": f"未找到备份，可能已被手动恢复: {e}"}
+
+# ================== 自启动管理 ==================
+
+# 备份目录
+BACKUP_REG_PATH = r"Software\PCDoctor\StartupBackup"
+BACKUP_FOLDER = os.path.join(os.getenv('APPDATA'), 'PCDoctor', 'StartupBackup')
+if not os.path.exists(BACKUP_FOLDER):
+    os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+@eel.expose
+def get_startup_items_full():
+    """获取所有启动项详情（包括已禁用的项）"""
+    items = []
+    # 注册表扫描路径 (hive, key_path, is_hklm)
+    reg_locations = [
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", True),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\RunOnce", True),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", False),
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\RunOnce", False),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", True),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce", True),
+    ]
+    
+    for hive, sub_key, is_hklm in reg_locations:
+        try:
+            key = winreg.OpenKey(hive, sub_key, 0, winreg.KEY_READ)
+            i = 0
+            while True:
+                try:
+                    name, value, _ = winreg.EnumValue(key, i)
+                    items.append({
+                        "name": name,
+                        "command": value,
+                        "source": "registry",
+                        "location": f"HKEY_{'LOCAL_MACHINE' if is_hklm else 'CURRENT_USER'}\\{sub_key}\\{name}",
+                        "enabled": True,
+                        "is_hklm": is_hklm,
+                        "reg_path": sub_key,
+                        "value_name": name,
+                        "value_data": value
+                    })
+                    i += 1
+                except OSError:
+                    break
+            winreg.CloseKey(key)
+        except:
+            pass
+
+    # 扫描启动文件夹
+    startup_folders = [
+        (os.path.expandvars(r'%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup'), False),
+        (os.path.expandvars(r'%ProgramData%\Microsoft\Windows\Start Menu\Programs\Startup'), True),
+    ]
+    for folder, is_common in startup_folders:
+        if os.path.exists(folder):
+            for item in os.listdir(folder):
+                if item.endswith('.lnk'):
+                    full_path = os.path.join(folder, item)
+                    items.append({
+                        "name": item[:-4],
+                        "command": full_path,
+                        "source": "folder",
+                        "location": full_path,
+                        "enabled": True,
+                        "folder_path": full_path
+                    })
+
+    # 读取备份的禁用注册表项
+    try:
+        backup_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, BACKUP_REG_PATH, 0, winreg.KEY_READ)
+        idx = 0
+        while True:
+            try:
+                subkey_name = winreg.EnumKey(backup_key, idx)
+                sub_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BACKUP_REG_PATH}\\{subkey_name}", 0, winreg.KEY_READ)
+                try:
+                    orig_location, _ = winreg.QueryValueEx(sub_key, "Location")
+                except:
+                    orig_location = ""
+                try:
+                    orig_name, _ = winreg.QueryValueEx(sub_key, "ValueName")
+                except:
+                    orig_name = subkey_name
+                try:
+                    orig_command, _ = winreg.QueryValueEx(sub_key, "Command")
+                except:
+                    orig_command = ""
+                items.append({
+                    "name": orig_name,
+                    "command": orig_command,
+                    "source": "registry",
+                    "location": orig_location,
+                    "enabled": False,
+                    "backup_subkey": subkey_name
+                })
+                winreg.CloseKey(sub_key)
+                idx += 1
+            except OSError:
+                break
+        winreg.CloseKey(backup_key)
+    except:
+        pass
+
+    # 备份文件夹中的禁用项
+    if os.path.exists(BACKUP_FOLDER):
+        for item in os.listdir(BACKUP_FOLDER):
+            if item.endswith('.lnk'):
+                full_path = os.path.join(BACKUP_FOLDER, item)
+                items.append({
+                    "name": item[:-4],
+                    "command": full_path,
+                    "source": "folder",
+                    "location": full_path,
+                    "enabled": False,
+                    "folder_path": full_path
+                })
+
+    # 计算影响程度
+    for item in items:
+        exe_path = item.get('command', '')
+        if item['source'] == 'registry':
+            if exe_path.startswith('"'):
+                end = exe_path.find('"', 1)
+                if end != -1:
+                    exe_path = exe_path[1:end]
+            else:
+                exe_path = exe_path.split(' ')[0]
+        size_mb = 0
+        if os.path.exists(exe_path):
+            try:
+                size_mb = round(os.path.getsize(exe_path) / (1024 * 1024), 2)
+            except:
+                pass
+        item['size_mb'] = size_mb
+        if size_mb > 200:
+            item['impact'] = '高'
+        elif size_mb > 50:
+            item['impact'] = '中'
+        else:
+            item['impact'] = '低'
+        item['exe_path'] = exe_path
+
+    return items
+
+@eel.expose
+def disable_startup_item(item_info):
+    """禁用启动项：备份后删除"""
+    try:
+        if item_info['source'] == 'registry':
+            hive = winreg.HKEY_LOCAL_MACHINE if item_info.get('is_hklm') else winreg.HKEY_CURRENT_USER
+            sub_path = item_info['reg_path']
+            value_name = item_info['value_name']
+            key = winreg.OpenKey(hive, sub_path, 0, winreg.KEY_ALL_ACCESS)
+            command, _ = winreg.QueryValueEx(key, value_name)
+            # 备份
+            backup_name = f"{sub_path.replace('\\', '_')}_{value_name}"
+            backup_key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{BACKUP_REG_PATH}\\{backup_name}")
+            winreg.SetValueEx(backup_key, "Location", 0, winreg.REG_SZ, item_info['location'])
+            winreg.SetValueEx(backup_key, "ValueName", 0, winreg.REG_SZ, value_name)
+            winreg.SetValueEx(backup_key, "Command", 0, winreg.REG_SZ, command)
+            winreg.SetValueEx(backup_key, "Hive", 0, winreg.REG_SZ, "HKEY_LOCAL_MACHINE" if item_info.get('is_hklm') else "HKEY_CURRENT_USER")
+            winreg.SetValueEx(backup_key, "KeyPath", 0, winreg.REG_SZ, sub_path)
+            winreg.CloseKey(backup_key)
+            winreg.DeleteValue(key, value_name)
+            winreg.CloseKey(key)
+        elif item_info['source'] == 'folder':
+            src = item_info['folder_path']
+            if os.path.exists(src):
+                shutil.move(src, os.path.join(BACKUP_FOLDER, os.path.basename(src)))
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def enable_startup_item(item_info):
+    """启用启动项：从备份恢复"""
+    try:
+        if item_info['source'] == 'registry':
+            backup_name = item_info.get('backup_subkey')
+            if not backup_name:
+                return {"success": False, "message": "无备份信息"}
+            backup_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BACKUP_REG_PATH}\\{backup_name}", 0, winreg.KEY_READ)
+            command, _ = winreg.QueryValueEx(backup_key, "Command")
+            value_name, _ = winreg.QueryValueEx(backup_key, "ValueName")
+            hive_str, _ = winreg.QueryValueEx(backup_key, "Hive")
+            key_path, _ = winreg.QueryValueEx(backup_key, "KeyPath")
+            winreg.CloseKey(backup_key)
+            hive = winreg.HKEY_LOCAL_MACHINE if hive_str == "HKEY_LOCAL_MACHINE" else winreg.HKEY_CURRENT_USER
+            key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_ALL_ACCESS)
+            winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
+            winreg.CloseKey(key)
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, f"{BACKUP_REG_PATH}\\{backup_name}")
+        elif item_info['source'] == 'folder':
+            # 文件夹备份恢复较复杂，需知道原位置。建议提示用户手动操作。
+            return {"success": False, "message": "请手动将备份文件夹中的快捷方式移回原启动文件夹"}
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@eel.expose
+def locate_file(file_path):
+    """打开文件所在目录并选中"""
+    try:
+        if os.path.exists(file_path):
+            subprocess.Popen(['explorer', '/select,', file_path])
+        else:
+            # 如果文件不存在，尝试打开所在目录
+            parent = os.path.dirname(file_path)
+            if os.path.exists(parent):
+                subprocess.Popen(['explorer', parent])
+        return True
+    except:
+        return False
+
+@eel.expose
+def search_online(name):
+    """在线搜索启动项信息"""
+    import webbrowser
+    webbrowser.open(f"https://www.baidu.com/s?wd={name} 启动项 是否需要")
+    return True
+
+# ================== Hosts 文件管理 ==================
+
+# Hosts 文件路径
+HOSTS_PATH = r"C:\Windows\System32\drivers\etc\hosts"
+HOSTS_BACKUP_PATH = os.path.join(os.path.dirname(HOSTS_PATH), "hosts_backup_by_pcdoctor")
+
+def _read_hosts_raw():
+    """读取原始 Hosts 文件内容（列表形式）"""
+    if not os.path.exists(HOSTS_PATH):
+        return []
+    with open(HOSTS_PATH, "r", encoding="utf-8") as f:
+        return f.readlines()
+
+def _write_hosts_raw(lines):
+    """写入 Hosts 文件"""
+    # 先备份
+    if not os.path.exists(HOSTS_BACKUP_PATH):
+        shutil.copy2(HOSTS_PATH, HOSTS_BACKUP_PATH)
+    with open(HOSTS_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+@eel.expose
+def get_hosts_rules():
+    """获取 Hosts 规则列表，返回 [{ip, domain, enabled, raw_line}]"""
+    rules = []
+    try:
+        lines = _read_hosts_raw()
+    except Exception as e:
+        return {"error": f"读取 Hosts 文件失败：{e}"}
+    
+    for line in lines:
+        original = line.rstrip('\n')
+        stripped = original.lstrip()
+        # 跳过空行和纯注释行（没有 IP 的注释）
+        if not stripped or stripped.startswith('#'):
+            # 尝试解析注释行看是否包含有效规则
+            content = stripped.lstrip('#').lstrip()
+            parts = content.split()
+            if len(parts) >= 2:
+                # 这可能是一个被注释掉的规则
+                ip = parts[0]
+                domain = parts[1]
+                # 简单判断 IP 格式
+                if len(ip.split('.')) == 4:
+                    rules.append({
+                        "ip": ip,
+                        "domain": domain,
+                        "enabled": False,
+                        "raw": original
+                    })
+                    continue
+            # 否则视为普通注释
+            rules.append({
+                "ip": "",
+                "domain": "",
+                "enabled": False,
+                "raw": original,
+                "is_comment_only": True
+            })
+            continue
+        
+        # 正常行：IP + 域名
+        parts = stripped.split()
+        if len(parts) >= 2:
+            ip = parts[0]
+            domain = parts[1]
+            rules.append({
+                "ip": ip,
+                "domain": domain,
+                "enabled": True,
+                "raw": original
+            })
+        else:
+            # 不识别的内容
+            rules.append({
+                "ip": "",
+                "domain": "",
+                "enabled": False,
+                "raw": original,
+                "is_other": True
+            })
+    return rules
+
+@eel.expose
+def save_hosts_rules(rules):
+    """保存规则列表到 Hosts 文件。rules 格式与 get_hosts_rules 返回的一致"""
+    lines = []
+    for rule in rules:
+        # 如果是纯注释行（无IP）或其它不识别内容，直接保留原样
+        if rule.get("is_comment_only") or rule.get("is_other"):
+            lines.append(rule["raw"] + "\n")
+            continue
+        
+        # 如果 IP 或 domain 为空，则跳过（删除该条规则）
+        if not rule.get("ip") or not rule.get("domain"):
+            continue
+        
+        line = f"{rule['ip']} {rule['domain']}"
+        if not rule.get("enabled", True):
+            line = "# " + line
+        lines.append(line + "\n")
+    
+    try:
+        _write_hosts_raw(lines)
+        return {"success": True}
+    except PermissionError:
+        return {"success": False, "message": "权限不足，请以管理员身份运行程序。"}
+    except Exception as e:
+        return {"success": False, "message": f"保存失败：{e}"}
+
+@eel.expose
+def restore_hosts_backup():
+    """从备份恢复 Hosts 文件"""
+    if not os.path.exists(HOSTS_BACKUP_PATH):
+        return {"success": False, "message": "备份文件不存在。"}
+    try:
+        shutil.copy2(HOSTS_BACKUP_PATH, HOSTS_PATH)
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": f"恢复失败：{e}"}
+
+# 常用屏蔽规则（广告/恶意网站示例，可根据需要扩充）
+PRESET_RULES = [
+    ("127.0.0.1", "doubleclick.net"),
+    ("127.0.0.1", "googlesyndication.com"),
+    ("127.0.0.1", "googleadservices.com"),
+    ("127.0.0.1", "adservice.google.com"),
+]
+
+@eel.expose
+def get_preset_rules():
+    """返回常用的屏蔽规则列表"""
+    return [{"ip": ip, "domain": domain, "enabled": True, "raw": f"{ip} {domain}"} for ip, domain in PRESET_RULES]
+
+@eel.expose
+def add_hosts_entry(ip, domain):
+    """添加一条主机记录"""
+    try:
+        with open(HOSTS_PATH, "a", encoding="utf-8") as f:
+            f.write(f"\n{ip} {domain}")
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+# ==================== 设置面板相关 ====================
+
+# 当前版本号（每次发版时手动更新）
+APP_VERSION = "1.3.0"
+GITHUB_REPO = "mhr121126/PC-Doctor"
+
+@eel.expose
+def get_app_info():
+    """返回应用信息（版本、仓库地址等）"""
+    return {
+        "version": APP_VERSION,
+        "repo": f"https://github.com/{GITHUB_REPO}",
+        "author": "mhr121126",
+        "name": "电脑医生 (PC Doctor)"
+    }
+
+@eel.expose
+def check_for_update():
+    """检查 GitHub Release 是否有新版本"""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "PC-Doctor-Update-Check")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            latest_version = data.get("tag_name", "").lstrip("v")
+            download_url = data.get("html_url", "")
+            
+            if latest_version and latest_version != APP_VERSION:
+                try:
+                    latest_parts = [int(x) for x in latest_version.split(".")]
+                    current_parts = [int(x) for x in APP_VERSION.split(".")]
+                    if latest_parts > current_parts:
+                        return {
+                            "has_update": True,
+                            "latest_version": latest_version,
+                            "current_version": APP_VERSION,
+                            "download_url": download_url
+                        }
+                except:
+                    if latest_version != APP_VERSION:
+                        return {
+                            "has_update": True,
+                            "latest_version": latest_version,
+                            "current_version": APP_VERSION,
+                            "download_url": download_url
+                        }
+            return {"has_update": False, "current_version": APP_VERSION}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"has_update": False, "error": "仓库暂不可用，请稍后再试。", "current_version": APP_VERSION}
+        return {"has_update": False, "error": f"网络错误：{e.code}", "current_version": APP_VERSION}
+    except Exception as e:
+        return {"has_update": False, "error": f"检查失败：{str(e)[:50]}", "current_version": APP_VERSION}
+
+@eel.expose
+def get_autostart_status():
+    """检查当前是否已设置开机自启"""
+    startup_folder = os.path.expandvars(r'%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup')
+    shortcut_path = os.path.join(startup_folder, "电脑医生.lnk")
+    return {"enabled": os.path.exists(shortcut_path)}
+
+@eel.expose
+def set_autostart(enabled):
+    """设置或取消开机自启"""
+    startup_folder = os.path.expandvars(r'%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup')
+    if not os.path.exists(startup_folder):
+        os.makedirs(startup_folder, exist_ok=True)
+    shortcut_path = os.path.join(startup_folder, "电脑医生.lnk")
+    
+    if enabled:
+        if getattr(sys, 'frozen', False):
+            exe_path = sys.executable
+        else:
+            return {"success": False, "message": "源码运行无法设置开机自启，请使用打包后的 exe 版本。"}
+        
+        try:
+            ps_script = f"""
+            $WshShell = New-Object -ComObject WScript.Shell
+            $Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
+            $Shortcut.TargetPath = '{exe_path}'
+            $Shortcut.WorkingDirectory = '{os.path.dirname(exe_path)}'
+            $Shortcut.Save()
+            """
+            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, timeout=5)
+            return {"success": True, "message": "已设置开机自启"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+    else:
+        if os.path.exists(shortcut_path):
+            try:
+                os.remove(shortcut_path)
+                return {"success": True, "message": "已取消开机自启"}
+            except Exception as e:
+                return {"success": False, "message": str(e)}
+        return {"success": True, "message": "未设置开机自启"}
+
+@eel.expose
+def export_knowledge_base():
+    """导出知识库为 JSON 字符串"""
+    try:
+        with open('knowledge_base.json', 'r', encoding='utf-8') as f:
+            return f.read()
+    except:
+        return "[]"
+
+@eel.expose
+def import_knowledge_base(json_str):
+    """导入知识库 JSON 字符串，合并到现有知识库"""
+    try:
+        new_data = json.loads(json_str)
+        if not isinstance(new_data, list):
+            return {"success": False, "message": "格式错误，需要 JSON 数组"}
+        
+        existing = []
+        if os.path.exists('knowledge_base.json'):
+            with open('knowledge_base.json', 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+        
+        existing_questions = {item['question'] for item in existing}
+        added = 0
+        for item in new_data:
+            if item.get('question') and item.get('answer'):
+                if item['question'] not in existing_questions:
+                    existing.append(item)
+                    existing_questions.add(item['question'])
+                    added += 1
+        
+        with open('knowledge_base.json', 'w', encoding='utf-8') as f:
+            json.dump(existing, f, ensure_ascii=False, indent=4)
+        
+        learning.refresh_cache()
+        
+        return {"success": True, "message": f"成功导入 {added} 条新知识"}
+    except json.JSONDecodeError:
+        return {"success": False, "message": "JSON 格式解析失败"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 # ================== 大文件扫描 & 开机耗时 ==================
 @eel.expose
