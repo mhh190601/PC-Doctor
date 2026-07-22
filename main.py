@@ -15,9 +15,15 @@ import psutil
 import hashlib
 import re
 import time
+import math
+import random
 import urllib.request
 import urllib.error
 import learning  # 导入自学习模块
+from PIL import Image, ImageTk
+import random
+import string
+import stat
 
 # PyInstaller 打包兼容：确保临时解压目录在路径中
 if getattr(sys, 'frozen', False):
@@ -33,6 +39,22 @@ learning.refresh_cache()
 eel.init(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web'))
 
 # ================== 原有优化功能 (保持不变) ==================
+THEME_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme_pref.txt')
+
+@eel.expose
+def get_theme():
+    """获取用户保存的主题 'light' 或 'dark'"""
+    if os.path.exists(THEME_FILE):
+        with open(THEME_FILE, 'r') as f:
+            return f.read().strip()
+    return 'light'
+
+@eel.expose
+def set_theme(theme):
+    """保存主题偏好"""
+    with open(THEME_FILE, 'w') as f:
+        f.write(theme)
+
 @eel.expose
 def clean_temp_files():
     results = []
@@ -1447,7 +1469,7 @@ def add_hosts_entry(ip, domain):
 # ==================== 设置面板相关 ====================
 
 # 当前版本号（每次发版时手动更新）
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 GITHUB_REPO = "mhr121126/PC-Doctor"
 
 @eel.expose
@@ -2232,9 +2254,310 @@ def delete_selected_files(file_list):
             errors.append(f"删除失败 {f}: {str(e)}")
     return {"deleted": deleted, "errors": errors}
 
+@eel.expose
+def pick_files_for_shred():
+    """
+    打开文件选择对话框，让用户选择要粉碎的文件
+    返回: {"files": ["C:\\path\\to\\file1", ...]} 或 {"files": []}
+    """
+    import tkinter as tk
+    from tkinter import filedialog
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        file_paths = filedialog.askopenfilenames(
+            title='选择要粉碎的文件（不可恢复！）',
+            filetypes=[('所有文件', '*.*')]
+        )
+        root.destroy()
+        return {"files": list(file_paths)}
+    except Exception as e:
+        return {"files": [], "error": str(e)}
+
+
+@eel.expose
+def shred_files(file_paths, passes=3):
+    """
+    文件粉碎：覆写后删除
+    file_paths: 文件路径列表
+    passes: 覆写次数，默认3次
+    返回: {success: True/False, message: str, shredded: int}
+    """
+    shredded = 0
+    errors = []
+    
+    for path in file_paths:
+        if not os.path.exists(path):
+            errors.append(f"文件不存在: {path}")
+            continue
+            
+        try:
+            # 移除只读属性
+            os.chmod(path, stat.S_IWRITE)
+            
+            file_size = os.path.getsize(path)
+            
+            # 多次覆写
+            for _ in range(passes):
+                with open(path, 'wb') as f:
+                    # 第一次写0，第二次写1，第三次随机
+                    if _ == 0:
+                        f.write(b'\x00' * file_size)
+                    elif _ == 1:
+                        f.write(b'\xFF' * file_size)
+                    else:
+                        f.write(os.urandom(file_size))
+                    f.flush()
+                    os.fsync(f.fileno())
+            
+            # 重命名为随机名称，防止原文件名恢复
+            rand_name = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+            rand_path = os.path.join(os.path.dirname(path), rand_name)
+            os.rename(path, rand_path)
+            
+            # 删除
+            os.remove(rand_path)
+            shredded += 1
+            
+        except PermissionError:
+            errors.append(f"权限不足: {path}，请以管理员身份运行。")
+        except Exception as e:
+            errors.append(f"粉碎失败 {path}: {str(e)}")
+    
+    message = f"成功粉碎 {shredded} 个文件。"
+    if errors:
+        message += "\n" + "\n".join(errors)
+    
+    return {
+        "success": shredded > 0,
+        "message": message,
+        "shredded": shredded
+    }
+
+@eel.expose
+def get_removable_drives():
+    """
+    获取所有可移动磁盘（U盘）列表
+    返回: [{"drive": "D:", "label": "MyDrive", "size_gb": 32.0, "model": "SanDisk"}, ...]
+    """
+    drives = []
+    try:
+        result = subprocess.run(
+            ['powershell', '-Command', 
+             'Get-WmiObject -Class Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 } | ForEach-Object { Write-Output "$($_.DeviceID)|$($_.VolumeName)|$([math]::Round($_.Size/1GB,1))" }'],
+            capture_output=True, text=True, timeout=10
+        )
+        lines = result.stdout.strip().split('\n')
+        for line in lines:
+            if '|' in line:
+                parts = line.strip().split('|')
+                if len(parts) >= 3:
+                    drives.append({
+                        "drive": parts[0],
+                        "label": parts[1] or "未命名",
+                        "size_gb": float(parts[2])
+                    })
+    except:
+        pass
+    return drives
+
+@eel.expose
+def write_iso_to_usb(iso_path, target_drive):
+    """
+    将ISO镜像写入U盘
+    iso_path: ISO文件路径
+    target_drive: 目标盘符，如 "D:"
+    返回写入结果
+    """
+    if not os.path.exists(iso_path):
+        return {"success": False, "message": "ISO文件不存在，请检查路径。"}
+    
+    if not target_drive:
+        return {"success": False, "message": "请选择目标U盘。"}
+    
+    target_drive = target_drive.rstrip('\\').rstrip(':')
+    
+    try:
+        ps_script = f"""
+        $iso = "{iso_path}"
+        $drive = "{target_drive}"
+        $mount = Mount-DiskImage -ImagePath $iso -StorageType ISO -PassThru
+        $driveLetter = ($mount | Get-Volume).DriveLetter
+        $sourcePath = $driveLetter + ":\\"
+        Format-Volume -DriveLetter $drive -FileSystem FAT32 -NewFileSystemLabel "PC-DOCTOR" -Force -Confirm:$false
+        Copy-Item -Path "$sourcePath*" -Destination "$drive\\" -Recurse -Force
+        Dismount-DiskImage -ImagePath $iso
+        Write-Output "SUCCESS"
+        """
+        result = subprocess.run(
+            ['powershell', '-Command', ps_script],
+            capture_output=True, text=True, timeout=1800
+        )
+        if "SUCCESS" in result.stdout:
+            return {"success": True, "message": f"启动盘制作成功！\n已将ISO内容写入 {target_drive}: 盘。"}
+        else:
+            error_msg = result.stderr or result.stdout or "未知错误"
+            return {"success": False, "message": f"写入失败：{error_msg[:200]}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "写入超时（超过30分钟），请检查ISO文件和U盘状态。"}
+    except Exception as e:
+        return {"success": False, "message": str(e)[:200]}
+
 # ================== 启动 ==================
 import atexit
 import signal
+import tkinter as tk
+
+def show_splash(duration=2800):
+    """透明背景 + Logo 从上到下高亮扫描 + 微粒子"""
+    import tkinter as tk
+    from PIL import Image, ImageTk
+    import math
+    import random
+
+    root = tk.Tk()
+    root.overrideredirect(True)
+    root.attributes('-topmost', True)
+    root.configure(bg='black')
+    root.wm_attributes('-transparentcolor', 'black')
+
+    win_w, win_h = 360, 420
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    x = (sw - win_w) // 2
+    y = (sh - win_h) // 2
+    root.geometry(f'{win_w}x{win_h}+{x}+{y}')
+
+    canvas = tk.Canvas(root, width=win_w, height=win_h, bg='black', highlightthickness=0)
+    canvas.pack()
+
+    # 加载原始 Logo（不做 PhotoImage，只保留 PIL 对象用于逐像素处理）
+    base_logo = None
+    try:
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'my_logo.ico')
+        img = Image.open(logo_path)
+        img.seek(0)
+        sizes = []
+        try:
+            while True:
+                sizes.append(img.size)
+                img.seek(img.tell() + 1)
+        except EOFError:
+            pass
+        if sizes:
+            img.seek(sizes.index(max(sizes)))
+        else:
+            img.seek(0)
+        base_logo = img.resize((160, 160), Image.Resampling.LANCZOS).convert('RGBA')
+    except:
+        pass
+
+    # 粒子系统
+    particles = []
+    def spawn_particle():
+        cx, cy = win_w // 2, 150
+        angle = random.uniform(0, 2 * math.pi)
+        dist = random.uniform(50, 100)
+        px = cx + dist * math.cos(angle)
+        py = cy + dist * math.sin(angle)
+        vx = random.uniform(-0.3, 0.3)
+        vy = random.uniform(-0.8, -0.2)
+        life = random.uniform(1.5, 2.5)
+        particles.append([px, py, vx, vy, random.randint(1, 2), 0.0, life])
+
+    last_spawn = time.time()
+    max_particles = 25
+    start_time = time.time()
+
+    # Logo 中心位置
+    logo_center_x = win_w // 2
+    logo_center_y = 150
+
+    def create_highlighted_logo(highlight_y_ratio, highlight_width_ratio=0.15):
+        """根据高亮在 Logo 中的相对位置（0~1），返回带亮度渐变的 PhotoImage"""
+        if base_logo is None:
+            return None
+        logo_copy = base_logo.copy()
+        pixels = logo_copy.load()
+        w, h = logo_copy.size
+
+        highlight_center = int(h * highlight_y_ratio)
+        half_width = max(1, int(h * highlight_width_ratio / 2))
+
+        for py in range(h):
+            dist = abs(py - highlight_center)
+            if dist < half_width:
+                factor = 1.0 - (dist / half_width)
+                brightness_boost = 1.0 + factor * 0.8  # 最高提亮 80%
+                for px in range(w):
+                    r, g, b, a = pixels[px, py]
+                    if a > 0:
+                        r = min(255, int(r * brightness_boost))
+                        g = min(255, int(g * brightness_boost))
+                        b = min(255, int(b * brightness_boost))
+                        pixels[px, py] = (r, g, b, a)
+
+        return ImageTk.PhotoImage(logo_copy)
+
+    def update():
+        nonlocal last_spawn
+        canvas.delete('all')
+
+        elapsed = time.time() - start_time
+        t = min(elapsed / duration, 1.0)
+
+        # 整体淡入
+        alpha = 1 - (1 - t) ** 3
+
+        # 高亮扫描：来回扫动，约 1.2 秒一个方向
+        scan_speed = 1.2
+        scan_progress = (elapsed / scan_speed) % 1.0
+        if int(elapsed / scan_speed) % 2 == 0:
+            highlight_pos = scan_progress  # 上→下
+        else:
+            highlight_pos = 1.0 - scan_progress  # 下→上
+
+        # Logo + 高亮（始终绘制）
+        if base_logo is not None:
+            highlighted = create_highlighted_logo(highlight_pos, highlight_width_ratio=0.12)
+            if highlighted is not None:
+                canvas.create_image(logo_center_x, logo_center_y, image=highlighted)
+                canvas.highlighted_ref = highlighted
+
+        # 微粒子
+        now = time.time()
+        if len(particles) < max_particles and now - last_spawn > 0.08:
+            spawn_particle()
+            last_spawn = now
+
+        for p in particles[:]:
+            p[0] += p[2]
+            p[1] += p[3]
+            p[5] += 0.02
+            life_ratio = p[5] / p[6] if p[6] > 0 else 1.0
+            if life_ratio >= 1.0 or p[1] < 0 or p[1] > win_h:
+                particles.remove(p)
+                continue
+            particle_alpha = min(life_ratio * 2, 2 - life_ratio * 2) * alpha
+            rv = int(255 * particle_alpha)
+            canvas.create_oval(p[0] - p[4], p[1] - p[4], p[0] + p[4], p[1] + p[4], fill=f'#{rv:02x}{rv:02x}{rv:02x}', outline='')
+
+        # 文字（始终绘制，颜色带淡入）
+        rv = int(255 * alpha)
+        text_color = f'#{rv:02x}{rv:02x}{rv:02x}'
+        canvas.create_text(win_w // 2, 310, text="电脑医生", font=("Microsoft YaHei", 20, "bold"), fill=text_color)
+        rv2 = int(255 * alpha * 0.7)
+        sub_color = f'#{rv2:02x}{rv2:02x}{rv2:02x}'
+        canvas.create_text(win_w // 2, 345, text="PC Doctor", font=("Microsoft YaHei", 12), fill=sub_color)
+
+        if t < 1.0:
+            root.after(30, update)
+
+    update()
+    root.after(duration, root.destroy)
+    root.mainloop()
+
 
 def force_exit(page=None, sockets=None):
     """强制退出整个 Python 进程（忽略 Eel 传来的参数）"""
@@ -2245,27 +2568,28 @@ def exit_app():
     force_exit()
 
 if __name__ == '__main__':
-    # 启动网速悬浮窗线程（显式从 speed_float 导入，确保 PyInstaller 能检测到）
+    # 1. 显示启动画面
+    show_splash(2500)
+
+    # 2. 启动网速悬浮窗线程（显式从 speed_float 导入，确保 PyInstaller 能检测到）
     from speed_float import start_monitor
     import threading
     t = threading.Thread(target=start_monitor, daemon=True)
     t.start()
     
-    # 如果知识库为空且存在JSON文件，自动导入
+    # 3. 如果知识库为空且存在JSON文件，自动导入
     if not learning.load_knowledge_data() and os.path.exists('knowledge_base.json'):
         learning.import_from_json('knowledge_base.json')
     
+    # 4. 启动 Eel 主窗口
     import traceback
-    # 方案1: 尝试 Chrome 浏览器
-    # 方案2: Edge 浏览器  
-    # 方案3: 系统默认浏览器（最可靠但会有地址栏）
     for try_mode, try_name in [('chrome', 'Chrome'), ('edge', 'Edge'), (None, '默认浏览器')]:
         try:
             kwargs = {'size': (900, 700), 'close_callback': force_exit}
             if try_mode is not None:
                 kwargs['mode'] = try_mode
             eel.start('index.html', **kwargs)
-            break  # 如果 start 正常返回（用户关闭窗口），退出循环
+            break
         except Exception as e:
             print(f"[启动] {try_name} 模式失败: {e}")
             traceback.print_exc()
