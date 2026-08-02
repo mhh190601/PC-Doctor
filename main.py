@@ -1504,7 +1504,7 @@ def add_hosts_entry(ip, domain):
 
 # 当前版本号（每次发版时手动更新）
 APP_VERSION = "1.5.0"
-GITHUB_REPO = "mhr121126/PC-Doctor"
+GITHUB_REPO = "mhh190601/PC-Doctor"
 
 
 
@@ -1617,7 +1617,7 @@ def get_app_info():
     return {
         "version": APP_VERSION,
         "repo": f"https://github.com/{GITHUB_REPO}",
-        "author": "mhr121126",
+        "author": "mhh190601",
         "name": "电脑医生 (PC Doctor)"
     }
 
