@@ -1,0 +1,122 @@
+[
+  {
+    "code": "0x000000ef",
+    "name": "CRITICAL_PROCESS_DIED",
+    "cause": "关键系统进程意外终止，通常由驱动冲突、系统文件损坏或硬盘故障引起",
+    "solution": "1. 更新显卡驱动和主板芯片组驱动到最新版本\n2. 以管理员身份运行命令提示符，输入 sfc /scannow 修复系统文件\n3. 检查硬盘健康度，使用 CrystalDiskInfo 工具\n4. 如果近期安装过新软件或硬件，尝试卸载或移除\n5. 运行 DISM 修复系统映像：DISM /Online /Cleanup-Image /RestoreHealth",
+    "tags": ["蓝屏", "驱动", "系统文件", "硬盘"],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000001a",
+    "name": "MEMORY_MANAGEMENT",
+    "cause": "内存管理错误，通常是内存条故障或驱动内存泄漏导致",
+    "solution": "1. 运行 Windows 内存诊断工具：在开始菜单搜索 mdsched\n2. 如果有两根以上内存条，尝试逐一拔下测试是哪根有问题\n3. 更新主板 BIOS 到最新版本\n4. 检查是否有最近安装的软件导致内存泄漏，尝试卸载",
+    "tags": ["蓝屏", "内存", "驱动"],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000003b",
+    "name": "SYSTEM_SERVICE_EXCEPTION",
+    "cause": "系统服务异常，通常由显卡驱动或防病毒软件触发",
+    "solution": "1. 更新或回滚显卡驱动\n2. 暂时关闭或卸载第三方防病毒软件\n3. 运行 sfc /scannow 检查系统文件\n4. 检查最近安装的 Windows 更新，如果有问题可以卸载",
+    "tags": ["蓝屏", "驱动", "显卡", "杀毒"],
+    "severity": "中"
+  },
+  {
+    "code": "0x0000007b",
+    "name": "INACCESSIBLE_BOOT_DEVICE",
+    "cause": "系统无法访问启动设备，常见于硬盘模式更改或硬盘故障",
+    "solution": "1. 进入 BIOS，检查硬盘模式是否为 AHCI（不要用 IDE 或 RAID 除非需要）\n2. 检查硬盘数据线和电源线是否连接牢固\n3. 尝试用 Windows 安装 U 盘启动，选择\"修复计算机\"\n4. 如果硬盘检测失败，可能需要更换硬盘",
+    "tags": ["蓝屏", "启动", "硬盘", "BIOS"],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000050",
+    "name": "PAGE_FAULT_IN_NONPAGED_AREA",
+    "cause": "系统尝试访问不存在的内存地址，通常由内存故障或损坏的驱动引起",
+    "solution": "1. 运行 Windows 内存诊断工具\n2. 进入安全模式，卸载最近安装的驱动程序\n3. 关闭快速启动：控制面板 → 电源选项 → 选择电源按钮的功能 → 取消\"启用快速启动\"\n4. 检查硬盘错误：以管理员身份运行 chkdsk C: /f /r",
+    "tags": ["蓝屏", "内存", "驱动"],
+    "severity": "高"
+  },
+  {
+    "code": "0xc000021a",
+    "name": "STATUS_SYSTEM_PROCESS_TERMINATED",
+    "cause": "Winlogon.exe 或 CSRSS.exe 进程意外终止，通常因第三方软件或系统文件损坏",
+    "solution": "1. 进入高级启动选项 → 安全模式\n2. 在安全模式下卸载最近安装的软件\n3. 以管理员身份运行 sfc /scannow 和 DISM /Online /Cleanup-Image /RestoreHealth\n4. 如果仍无效，使用系统还原或重置此电脑",
+    "tags": ["蓝屏", "启动", "系统文件"],
+    "severity": "高"
+  },
+  {
+    "code": "0x000000d1",
+    "name": "DRIVER_IRQL_NOT_LESS_OR_EQUAL",
+    "cause": "驱动程序在不适当的 IRQL 级别访问了无效内存地址",
+    "solution": "1. 检查蓝屏信息中提到的驱动文件（如 .sys 结尾的文件名）\n2. 更新或回滚对应的驱动程序\n3. 更新网卡驱动（这是最常见的触发者）\n4. 进入安全模式排除驱动问题",
+    "tags": ["蓝屏", "驱动", "网卡"],
+    "severity": "中"
+  },
+  {
+    "code": "0x0000009f",
+    "name": "DRIVER_POWER_STATE_FAILURE",
+    "cause": "驱动程序电源状态切换失败，常见于休眠/睡眠唤醒时",
+    "solution": "1. 更新显卡、网卡、声卡驱动到最新版本\n2. 在设备管理器中，右键各设备 → 属性 → 电源管理 → 取消\"允许计算机关闭此设备以节约电源\"\n3. 关闭快速启动功能\n4. 检查是否有 BIOS 更新",
+    "tags": ["蓝屏", "驱动", "休眠"],
+    "severity": "中"
+  },
+  {
+    "code": "0x00000024",
+    "name": "NTFS_FILE_SYSTEM",
+    "cause": "NTFS 文件系统出现错误，硬盘可能存在坏道或文件系统损坏",
+    "solution": "1. 立即备份重要数据\n2. 以管理员身份运行 chkdsk C: /f /r，会提示下次重启时检查，选 Y 并重启\n3. 使用 CrystalDiskInfo 检查硬盘 SMART 健康状态\n4. 如果硬盘已有坏道，尽快更换",
+    "tags": ["蓝屏", "硬盘", "文件系统"],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000004e",
+    "name": "PFN_LIST_CORRUPT",
+    "cause": "页面帧号列表损坏，通常由内存故障或驱动问题引起",
+    "solution": "1. 运行 Windows 内存诊断工具\n2. 更新或回滚显卡驱动\n3. 关闭不必要的开机启动项\n4. 检查是否有内存超频，恢复默认设置",
+    "tags": ["蓝屏", "内存", "驱动"],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000001e",
+    "name": "KMODE_EXCEPTION_NOT_HANDLED",
+    "cause": "内核模式程序产生未被处理的异常",
+    "solution": "1. 记下蓝屏界面显示的驱动文件名（.sys 后缀）\n2. 在安全模式下卸载该驱动对应的软件\n3. 更新所有硬件驱动\n4. 运行 sfc /scannow 检查系统文件完整性",
+    "tags": ["蓝屏", "驱动", "内核"],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000101",
+    "name": "CLOCK_WATCHDOG_TIMEOUT",
+    "cause": "处理器时钟中断超时，通常由 CPU 超频或散热问题引起",
+    "solution": "1. 进入 BIOS 恢复默认设置（特别是关闭 CPU 超频）\n2. 清理 CPU 散热器灰尘，检查散热风扇是否正常运转\n3. 更新主板 BIOS 到最新版本\n4. 如果 CPU 已老化或长期高温运行，考虑更换",
+    "tags": ["蓝屏", "CPU", "散热", "超频"],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000116",
+    "name": "VIDEO_TDR_FAILURE",
+    "cause": "显卡驱动超时无响应，图形处理任务失败",
+    "solution": "1. 使用 DDU 工具彻底卸载显卡驱动，然后重装最新版\n2. 检查显卡温度是否过高，清理灰尘\n3. 降低显卡超频设置（如果有的话）\n4. 如果是笔记本双显卡，尝试在 BIOS 中切换显示模式\n5. 如果反复出现，显卡硬件可能已损坏",
+    "tags": ["蓝屏", "显卡", "驱动", "散热"],
+    "severity": "高"
+  },
+  {
+    "code": "0x000000f4",
+    "name": "CRITICAL_OBJECT_TERMINATION",
+    "cause": "关键系统进程或线程被终止，通常由硬盘故障、内存问题或系统文件损坏引起",
+    "solution": "1. 检查硬盘数据线和电源线是否松动\n2. 使用 CrystalDiskInfo 检测硬盘健康状态\n3. 运行 sfc /scannow 和 chkdsk C: /f /r\n4. 拔下并重新插紧内存条\n5. 更新主板芯片组驱动",
+    "tags": ["蓝屏", "硬盘", "内存"],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000007e",
+    "name": "SYSTEM_THREAD_EXCEPTION_NOT_HANDLED",
+    "cause": "系统线程产生未处理的异常",
+    "solution": "1. 排查最近安装的软件或驱动，尝试卸载\n2. 更新所有驱动程序\n3. 运行 sfc /scannow 修复系统文件\n4. 清理磁盘空间，确保系统盘有足够剩余空间",
+    "tags": ["蓝屏", "驱动", "软件冲突"],
+    "severity": "高"
+  }
+]

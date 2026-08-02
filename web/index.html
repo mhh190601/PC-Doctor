@@ -74,9 +74,9 @@
             border-top-color: #30363d;
         }
         .dark-theme .chat-input input {
-            background: #0d1117;
-            border-color: #30363d;
-            color: #e6edf3;
+            background: #0d1117 !important;
+            border-color: #30363d !important;
+            color: #e6edf3 !important;
         }
         .dark-theme .modal-content {
             background: #161b22;
@@ -93,10 +93,31 @@
             background: #1c2129;
             border-color: #30363d;
         }
+        .dark-theme .welcome-feature:hover {
+            background: #21262d;
+        }
+        .dark-theme .welcome-feature .feature-icon {
+            color: #58a6ff;
+        }
         .dark-theme .carousel-card-front,
         .dark-theme .carousel-card-back {
             background: #1c2129;
             border-color: #30363d;
+        }
+        .dark-theme .carousel-card-front .tool-name,
+        .dark-theme .carousel-card-back .tool-name {
+            color: #e6edf3;
+        }
+        .dark-theme .carousel-card-front .tool-desc,
+        .dark-theme .carousel-card-back .tool-desc {
+            color: #8b949e;
+        }
+        .dark-theme .carousel-card-front .tool-icon svg,
+        .dark-theme .carousel-card-back .tool-icon svg {
+            stroke: #e6edf3;
+        }
+        .dark-theme .carousel-card .tool-icon {
+            color: #8b949e;
         }
         .dark-theme .carousel-card-right {
             background: linear-gradient(to right, #30363d, #444c56);
@@ -122,6 +143,17 @@
         }
         .dark-theme .setting-item {
             border-bottom-color: #30363d;
+        }
+        .dark-theme .net-card {
+            background: #161b22 !important;
+            border-color: #30363d !important;
+        }
+        .dark-theme .net-card:hover {
+            background: #1c2129 !important;
+        }
+        .dark-theme .privacy-card {
+            background: #161b22 !important;
+            border-color: #30363d !important;
         }
         .dark-theme .disk-table th {
             background: #1c2129;
@@ -157,6 +189,7 @@
         .splash-screen.fade-out {
             opacity: 0;
             visibility: hidden;
+            pointer-events: none;
         }
         .splash-content {
             text-align: center;
@@ -331,7 +364,7 @@
 
         /* ========== 智能问答面板 ========== */
         #panel-chat {
-            background: #ffffff;
+            background: var(--surface);
         }
 
         .chat-wrapper {
@@ -340,7 +373,7 @@
             height: 100%;
             max-width: 800px;
             margin: 0 auto;
-            background: #ffffff;
+            background: var(--surface);
         }
 
         /* 消息滚动区 */
@@ -395,6 +428,11 @@
             border-bottom-left-radius: 6px;
             color: #1b1f23;
         }
+        .dark-theme .ai-msg .msg-bubble {
+            background: #1c2129;
+            border-color: #30363d;
+            color: #e6edf3;
+        }
 
         /* 用户气泡 */
         .user-msg .msg-bubble {
@@ -431,30 +469,49 @@
             border-color: #0550ae;
             background: #f0f6ff;
         }
+        .dark-theme .feedback-area button {
+            background: #21262d;
+            border-color: #30363d;
+            color: #8b949e;
+        }
+        .dark-theme .feedback-area button:hover {
+            background: #30363d;
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+        .dark-theme .feedback-area .add-knowledge-btn {
+            color: #58a6ff;
+            border-color: #58a6ff;
+            background: #0d419d;
+        }
 
         /* 输入区域 */
         .chat-input {
             display: flex;
             gap: 10px;
             padding: 16px 20px;
-            border-top: 1px solid #f0f0f0;
-            background: #ffffff;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
             align-items: center;
         }
         .chat-input input {
             flex: 1;
             padding: 10px 16px;
-            border: 2px solid #e8eaed;
+            border: 2px solid var(--border);
             border-radius: 24px;
             font-size: 14px;
             outline: none;
-            background: #f8f9fb;
+            background: var(--bg);
+            color: var(--text);
             transition: border-color 0.2s, box-shadow 0.2s;
         }
         .chat-input input:focus {
             border-color: #0550ae;
             box-shadow: 0 0 0 3px rgba(5,80,174,0.1);
-            background: #fff;
+            background: var(--surface);
+        }
+        .chat-input input::placeholder {
+            color: var(--text-muted);
         }
         .chat-input button {
             width: 42px;
@@ -504,14 +561,14 @@
         .welcome-title {
             font-size: 22px;
             font-weight: 700;
-            color: #1b1f23;
+            color: var(--text);
             margin: 0 0 6px 0;
             letter-spacing: -0.3px;
         }
 
         .welcome-subtitle {
             font-size: 14px;
-            color: #656d76;
+            color: var(--text-secondary);
             margin: 0 0 32px 0;
         }
 
@@ -742,9 +799,19 @@
             margin-bottom: 6px;
         }
         .carousel-card .tool-desc {
-            font-size: 12px;
+            font-size: 11px;
             color: #656d76;
-            line-height: 1.4;
+            line-height: 1.3;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+            opacity: 0;
+            margin-top: 0;
+        }
+        .carousel-card:hover .tool-desc {
+            max-height: 48px;
+            opacity: 1;
+            margin-top: 4px;
         }
 
         /* 工具箱标题样式 */
@@ -849,6 +916,93 @@
         }
         .setting-btn:hover {
             background: var(--surface-hover);
+        }
+
+        /* 软件中心 */
+        .appstore-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            padding: 16px 0;
+        }
+        .appstore-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: all 0.15s;
+            box-shadow: var(--shadow-sm);
+        }
+        .appstore-card:hover {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+        .appstore-card .app-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .appstore-card .app-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+        .dark-theme .appstore-card .app-icon {
+            color: #58a6ff;
+        }
+        .appstore-card .app-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .appstore-card .app-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            flex: 1;
+        }
+        .appstore-card .app-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+        .appstore-card .app-version {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .appstore-card .app-btn {
+            padding: 6px 18px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+        .appstore-card .app-btn:hover {
+            background: var(--primary-hover);
+        }
+        .appstore-card .app-btn.installed {
+            background: var(--success);
+        }
+        .appstore-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            font-size: 14px;
         }
 
         /* 开关 */
@@ -972,62 +1126,6 @@
             padding-left: 0;
         }
 
-        /* 盘符选择弹窗 */
-        .drive-selector-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .drive-selector {
-            background: var(--surface);
-            border-radius: var(--radius-md);
-            padding: 24px;
-            min-width: 260px;
-            box-shadow: var(--shadow-md);
-        }
-        .drive-selector h3 {
-            margin: 0 0 14px;
-            font-size: 15px;
-            color: var(--text);
-        }
-        .drive-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .drive-item {
-            padding: 12px 16px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text);
-            transition: all 0.12s;
-        }
-        .drive-item:hover {
-            background: var(--primary-light);
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-        .drive-cancel {
-            margin-top: 12px;
-            padding: 8px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            text-align: center;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
         /* ========== 模态弹窗 ========== */
         .modal-overlay {
             display: none;
@@ -1147,6 +1245,10 @@
         @keyframes floatBadge {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-8px); }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
         @keyframes spinSlow {
             from { transform: rotate(0deg); }
@@ -1277,6 +1379,123 @@
             font-size: 13px;
             font-weight: 500;
         }
+
+        /* ========== 软件中心 全新设计 ========== */
+        .appstore-wrapper { max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+        .appstore-header { text-align: center; margin-bottom: 48px; }
+        .appstore-logo { width: 80px; height: 80px; border-radius: 24px; background: linear-gradient(135deg, #f0f5ff, #e0eaff); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: var(--primary); box-shadow: 0 4px 16px rgba(5,80,174,0.08); }
+        .appstore-header h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+        .appstore-header p { font-size: 15px; color: var(--text-secondary); }
+
+        /* 高级卡片 */
+        .app-card-premium {
+            position: relative;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 48px 32px 40px;
+            text-align: center;
+            box-shadow: var(--shadow-md), 0 0 0 1px rgba(5,80,174,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+            overflow: hidden;
+        }
+        .app-card-premium:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.08), 0 0 0 1px var(--primary);
+        }
+        .app-card-glow {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(5,80,174,0.03) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .app-card-icon {
+            color: var(--primary);
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        .app-card-premium h3 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+        .app-card-desc { font-size: 15px; color: var(--text-secondary); margin-bottom: 32px; }
+
+        /* 3D 按钮 */
+        .btn-3d-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 40px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 6px 0 #033d8b, 0 8px 20px rgba(5,80,174,0.3);
+            position: relative;
+            top: 0;
+        }
+        .btn-3d-primary:hover {
+            top: -2px;
+            box-shadow: 0 8px 0 #033d8b, 0 12px 28px rgba(5,80,174,0.4);
+        }
+        .btn-3d-primary:active {
+            top: 4px;
+            box-shadow: 0 2px 0 #033d8b, 0 4px 12px rgba(5,80,174,0.2);
+        }
+        .btn-3d-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            top: 0;
+        }
+
+        /* 进度条 */
+        .progress-container { margin-top: 28px; }
+        .progress-track {
+            background: var(--border);
+            border-radius: 12px;
+            height: 10px;
+            width: 100%;
+            overflow: hidden;
+            box-shadow: inset 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #0550ae, #58a6ff);
+            border-radius: 12px;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 10px rgba(5,80,174,0.5);
+        }
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        /* 状态消息 */
+        .status-message {
+            margin-top: 16px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* 深色模式适配 */
+        .dark-theme .appstore-logo { background: linear-gradient(135deg, #1c2a4a, #0d1b3e); }
+        .dark-theme .app-card-premium { background: #161b22; border-color: #30363d; }
+        .dark-theme .app-card-premium:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.3), 0 0 0 1px #58a6ff; }
+        .dark-theme .btn-3d-primary { box-shadow: 0 6px 0 #001d4a, 0 8px 20px rgba(88,166,255,0.3); }
+        .dark-theme .net-card { background: #161b22 !important; border-color: #30363d !important; }
+        .dark-theme .net-card:hover { background: #1c2129 !important; border-color: #58a6ff !important; }
+        .dark-theme .privacy-card { background: #161b22 !important; border-color: #30363d !important; }
     </style>
 </head>
 <body>
@@ -1284,7 +1503,17 @@
 <div id="splashScreen" class="splash-screen">
     <div class="splash-content">
         <div class="splash-logo">
-            <img src="pc_doctor.ico" alt="电脑医生 Logo" style="width: 100px; height: 100px;">
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#0550AE" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <!-- 显示器外框 -->
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <!-- 底座横线 -->
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <!-- 支架竖线 -->
+                <line x1="12" y1="17" x2="12" y2="21"/>
+                <!-- 屏幕上医疗十字（居中 y=7~13） -->
+                <line x1="12" y1="6" x2="12" y2="13"/>
+                <line x1="8.5" y1="9.5" x2="15.5" y2="9.5"/>
+            </svg>
         </div>
         <h1 class="splash-title">电脑医生</h1>
         <p class="splash-subtitle">PC Doctor</p>
@@ -1295,6 +1524,44 @@
         </div>
     </div>
 </div>
+<script>
+// 启动画面定时隐藏（独立脚本，不受后续JS错误影响）
+(function() {
+    var splash = document.getElementById('splashScreen');
+    if (!splash) return;
+    // 2.5秒后淡出
+    setTimeout(function() {
+        splash.classList.add('fade-out');
+        // 兜底：1.2秒后强制移除
+        setTimeout(function() { if (splash.parentNode) splash.remove(); }, 1200);
+        splash.addEventListener('transitionend', function() { if (splash.parentNode) splash.remove(); });
+    }, 2500);
+    // 终极兜底：5秒后无论如何移除
+    setTimeout(function() { if (splash.parentNode) splash.remove(); }, 5000);
+})();
+</script>
+<script>
+// 初始化兜底（独立脚本，不受主脚本错误影响）
+(function() {
+    function tryInit() {
+        // 管理员权限检测
+        if (typeof eel !== 'undefined' && typeof checkAdminStatus === 'function') {
+            try { setTimeout(checkAdminStatus, 500); } catch(e) {}
+            try { setInterval(checkAdminStatus, 30000); } catch(e) {}
+        }
+        // 工具箱轮播初始化
+        if (typeof initCarousel === 'function') {
+            var tools = document.getElementById('panel-tools');
+            if (tools && tools.classList.contains('active')) {
+                try { setTimeout(initCarousel, 100); } catch(e) {}
+            }
+        }
+    }
+    window.addEventListener('load', tryInit);
+    // 兜底：2秒后执行（即使load事件不触发）
+    setTimeout(tryInit, 2000);
+})();
+</script>
 <div class="container">
     <!-- 管理员权限提示条 -->
     <div id="adminWarning" class="admin-warning" style="display: none;">
@@ -1322,6 +1589,10 @@
         <div class="tab-item" data-panel="tools" onclick="switchPanel('tools')">
             ${iconTools()}
             工具箱
+        </div>
+        <div class="tab-item" data-panel="appstore" onclick="switchPanel('appstore')">
+            ${iconAppStore()}
+            软件中心
         </div>
         <div class="tab-item" data-panel="settings" onclick="switchPanel('settings')">
             ${iconSettings()}
@@ -1351,15 +1622,15 @@
                             
                             <div class="welcome-features">
                                 <div class="welcome-feature">
-                                    <span class="feature-icon">${iconChat()}</span>
+                                    <span class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
                                     <span class="feature-text">输入电脑问题，我会为你解答</span>
                                 </div>
                                 <div class="welcome-feature">
-                                    <span class="feature-icon">${iconOptimize()}</span>
+                                    <span class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>
                                     <span class="feature-text">答案有用请点赞，让我越变越聪明</span>
                                 </div>
                                 <div class="welcome-feature">
-                                    <span class="feature-icon">${iconSettings()}</span>
+                                    <span class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
                                     <span class="feature-text">答案不对？点击补充教我新知识</span>
                                 </div>
                             </div>
@@ -1442,6 +1713,8 @@
                 
             </div>
 
+
+
             <!-- 设置面板 -->
             <div class="panel" id="panel-settings">
                 <div style="padding:20px; max-width:600px;">
@@ -1517,6 +1790,63 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 软件中心面板 -->
+            <div class="panel" id="panel-appstore">
+                <div class="appstore-wrapper">
+                    <!-- 头部 -->
+                    <div class="appstore-header">
+                        <div class="appstore-logo">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                                <line x1="12" y1="8" x2="12" y2="16"/>
+                                <line x1="8" y1="12" x2="16" y2="12"/>
+                            </svg>
+                        </div>
+                        <h2>软件中心</h2>
+                        <p>探索更多实用工具，让电脑保持最佳状态</p>
+                    </div>
+
+                    <!-- C盘救星卡片 -->
+                    <div class="app-card-premium" id="cdiskCard">
+                        <div class="app-card-glow"></div>
+                        <div class="app-card-icon">
+                            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                                <circle cx="12" cy="12" r="10" stroke-dasharray="2 4"/>
+                                <circle cx="12" cy="12" r="6"/>
+                                <path d="M8 12h8 M12 8v8" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <h3>C盘救星</h3>
+                        <p class="app-card-desc">专治C盘爆红，一键清理+大文件搬家</p>
+                        
+                        <!-- 操作区 -->
+                        <div class="app-card-actions" id="cdiskActions">
+                            <button id="cdiskMainBtn" class="btn-3d-primary" onclick="handleCDiskSaver()">
+                                <span class="btn-icon" id="cdiskBtnIcon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 3v12"/>
+                                        <polyline points="7 11 12 16 17 11"/>
+                                        <line x1="4" y1="20" x2="20" y2="20"/>
+                                    </svg>
+                                </span>
+                                <span id="cdiskBtnText">一键下载</span>
+                            </button>
+                        </div>
+
+                        <!-- 进度条 -->
+                        <div class="progress-container" id="cdiskProgressContainer" style="display:none;">
+                            <div class="progress-track">
+                                <div class="progress-fill" id="cdiskProgressFill"></div>
+                            </div>
+                            <p class="progress-text" id="cdiskProgressLabel">正在下载 0%</p>
+                        </div>
+                        
+                        <!-- 提示信息 -->
+                        <div class="status-message" id="cdiskStatusMsg"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1563,14 +1893,143 @@
     function iconUninstall() { return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`; }
     function iconShredder() { return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`; }
     function iconUSB() { return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h.01M10 6h.01M14 6h.01M18 6h.01M6 10h.01M10 10h.01M6 14h.01M6 18h.01"/><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 20v-4M16 20v-4M8 4v2M16 4v2"/></svg>`; }
+    function iconCDisk() { return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12A10 10 0 1 1 12 2a10 10 0 0 1 10 10z"/><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>`; }
     function iconCpu() { return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="4" y1="9" x2="1" y2="9"/><line x1="4" y1="15" x2="1" y2="15"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/></svg>`; }
     function iconShield() { return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`; }
     function iconThermo() { return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>`; }
     function iconGpu() { return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="12" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01"/></svg>`; }
     function iconRestore() { return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`; }
+    function iconAppStore() { return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>`; }
 
     let currentUserQuestion = '';
     let currentKnowledgeId = null;
+
+    // ========== 软件中心 ==========
+    let cdiskStatus = 'none'; // none, downloading, installed
+
+    // 进入软件中心时初始化
+    async function initAppStore() {
+        console.log('[initAppStore] 被调用');
+        try {
+            const installed = await eel.is_cdisksaver_installed()();
+            console.log('[initAppStore] is_cdisksaver_installed返回:', installed);
+            cdiskStatus = installed ? 'installed' : 'none';
+            updateCDiskUI();
+        } catch(e) {
+            console.error('[initAppStore] 检查安装状态失败:', e);
+            cdiskStatus = 'none';
+            updateCDiskUI();
+        }
+    }
+
+    const CDISK_DOWNLOAD_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="4" y1="20" x2="20" y2="20"/></svg>`;
+    const CDISK_PLAY_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="10"/></svg>`;
+
+    function updateCDiskUI() {
+        console.log('[updateCDiskUI] 被调用, cdiskStatus=' + cdiskStatus);
+        const btn = document.getElementById('cdiskMainBtn');
+        const btnText = document.getElementById('cdiskBtnText');
+        const btnIcon = document.getElementById('cdiskBtnIcon');
+        const progressDiv = document.getElementById('cdiskProgressContainer');
+        const msgDiv = document.getElementById('cdiskStatusMsg');
+        if (!btn) { console.log('[updateCDiskUI] 按钮未找到！'); return; }
+        if (!btnText) { console.log('[updateCDiskUI] btnText未找到！'); return; }
+
+        if (msgDiv) msgDiv.textContent = '';
+        if (progressDiv) progressDiv.style.display = 'none';
+        btn.disabled = false;
+        // 移除之前的事件绑定（避免重复）
+        btn.onclick = null;
+
+        if (cdiskStatus === 'installed') {
+            if (btnIcon) btnIcon.innerHTML = CDISK_PLAY_ICON;
+            btnText.textContent = '打开';
+            btn.onclick = openCDiskSaver;
+            console.log('[updateCDiskUI] 状态=installed, onclick绑定为openCDiskSaver');
+        } else if (cdiskStatus === 'downloading') {
+            if (btnIcon) btnIcon.innerHTML = CDISK_DOWNLOAD_ICON;
+            btnText.textContent = '下载中...';
+            btn.disabled = true;
+        } else {
+            if (btnIcon) btnIcon.innerHTML = CDISK_DOWNLOAD_ICON;
+            btnText.textContent = '一键下载';
+            btn.onclick = handleCDiskSaver;
+            console.log('[updateCDiskUI] 状态=none, onclick绑定为handleCDiskSaver');
+        }
+    }
+
+    async function handleCDiskSaver() {
+        console.log('[handleCDiskSaver] 被调用, cdiskStatus=' + cdiskStatus);
+        if (cdiskStatus === 'installed') {
+            openCDiskSaver();
+            return;
+        }
+        if (cdiskStatus === 'downloading') return;
+
+        // 检测网络
+        try {
+            const online = await eel.check_network()();
+            if (!online) {
+                document.getElementById('cdiskStatusMsg').textContent = '未连接互联网，无法下载';
+                return;
+            }
+        } catch(e) {
+            console.error('[handleCDiskSaver] 网络检测异常:', e);
+        }
+
+        // 开始下载
+        cdiskStatus = 'downloading';
+        updateCDiskUI();
+        var pc = document.getElementById('cdiskProgressContainer');
+        var pm = document.getElementById('cdiskStatusMsg');
+        if (pc) pc.style.display = 'block';
+        if (pm) pm.textContent = '';
+
+        // 模拟进度条
+        let progress = 0;
+        const progressFill = document.getElementById('cdiskProgressFill');
+        const progressLabel = document.getElementById('cdiskProgressLabel');
+        const interval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.random() * 10;
+                if (progress > 90) progress = 90;
+                progressFill.style.width = progress + '%';
+                progressLabel.textContent = `正在下载 ${Math.round(progress)}%`;
+            }
+        }, 300);
+
+        // 调用后端安装
+        const result = await eel.install_cdisksaver()();
+        clearInterval(interval);
+
+        if (result.success) {
+            progressFill.style.width = '100%';
+            progressLabel.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>安装完成！';
+            setTimeout(() => {
+                cdiskStatus = 'installed';
+                updateCDiskUI();
+            }, 600);
+        } else {
+            document.getElementById('cdiskStatusMsg').textContent = (result.message || '下载失败');
+            cdiskStatus = 'none';
+            updateCDiskUI();
+        }
+    }
+
+    async function openCDiskSaver() {
+        console.log('[openCDiskSaver] 被调用');
+        try {
+            console.log('[openCDiskSaver] 调用 eel.launch_cdisksaver...');
+            const res = await eel.launch_cdisksaver()();
+            console.log('[openCDiskSaver] 结果:', res);
+            if (!res || !res.success) {
+                document.getElementById('cdiskStatusMsg').textContent = '❌ ' + ((res && res.message) || '打开失败');
+            }
+        } catch(e) {
+            console.error('[openCDiskSaver] 异常:', e);
+            document.getElementById('cdiskStatusMsg').textContent = '❌ 通信异常: ' + e;
+        }
+    }
 
     // ========== 退出程序 ==========
     async function exitApp() {
@@ -1582,9 +2041,15 @@
     // ========== 面板切换 ==========
     function switchPanel(panelName) {
         document.querySelectorAll('.tab-item').forEach(item => item.classList.remove('active'));
-        document.querySelector(`.tab-item[data-panel="${panelName}"]`).classList.add('active');
+        var tabItem = document.querySelector('.tab-item[data-panel="' + panelName + '"]');
+        if (tabItem) tabItem.classList.add('active');
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        document.getElementById(`panel-${panelName}`).classList.add('active');
+        var panel = document.getElementById('panel-' + panelName);
+        if (panel) panel.classList.add('active');
+        if (panelName === 'tools') setTimeout(initCarousel, 100);
+        if (panelName === 'settings') initSettings();
+        if (panelName === 'appstore') initAppStore();
+
     }
 
     // ========== 状态栏实时更新 ==========
@@ -1638,7 +2103,14 @@
 
         const bubble = document.createElement('div');
         bubble.className = 'msg-bubble';
-        bubble.innerHTML = text.replace(/\n/g, '<br>');
+        // 用户消息用 textContent（防 XSS），AI/系统消息先转义再渲染换行（answer 字段可能含未转义 HTML，必须转义防注入）
+        if (type === 'user') {
+            bubble.textContent = text;
+            bubble.style.whiteSpace = 'pre-wrap';
+            bubble.style.wordBreak = 'break-word';
+        } else {
+            bubble.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+        }
 
         // 时间戳
         const time = document.createElement('div');
@@ -1648,8 +2120,10 @@
         bubble.appendChild(time);
 
         msgDiv.appendChild(bubble);
-        messages.appendChild(msgDiv);
-        messages.scrollTop = messages.scrollHeight;
+        if (messages) {
+            messages.appendChild(msgDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
         return msgDiv;
     }
 
@@ -1676,74 +2150,113 @@
 
     // ========== 工具箱功能（弹窗展示） ==========
     // 大文件扫描：盘符选择在弹窗内
-    function showDriveSelectorForLargeFiles() {
+    async function scanLargeFiles() {
+        let html = `
+            <div style="padding:20px;">
+                <h3 style="margin-top:0;">📁 大文件扫描</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">快速找出磁盘中超过50MB的大文件，支持一键搬家释放空间</p>
+                <div style="margin-bottom:16px;">
+                    <span style="line-height:36px; font-weight:500; margin-right:8px;">选择磁盘：</span>
+                    <div id="largeDriveBtns" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">加载中...</div>
+                </div>
+                <div id="largeScanResult" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+        `;
+        showModal('📁 大文件扫描', html);
         eel.get_drives()().then(drives => {
-            let html = '<h4>📁 选择要扫描的盘符</h4><div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">';
-            drives.forEach(drive => {
-                html += `<button onclick="scanLargeFilesOnDrive('${drive}')" style="padding:10px; background:#f0f4ff; border:1px solid #d0d7ff; border-radius:6px; cursor:pointer; font-size:15px;">${drive}</button>`;
+            let btnsHtml = '';
+            drives.forEach(d => {
+                btnsHtml += `<button class="btn btn-outline" onclick="runLargeScan('${d}')" style="padding:10px 20px; border-radius:8px; font-size:15px; font-weight:500;">💾 ${d}</button>`;
             });
-            html += '</div>';
-            showModal('📁 大文件扫描', html);
+            document.getElementById('largeDriveBtns').innerHTML = btnsHtml;
         }).catch(e => {
-            showModal('大文件扫描', `<p>获取盘符失败：${e}</p>`);
+            document.getElementById('largeDriveBtns').innerHTML = `<p style="color:red;">获取盘符失败：${e}</p>`;
         });
     }
-
-    // 执行大文件扫描
-    async function scanLargeFilesOnDrive(drive) {
-        updateModalContent(`<p>${iconOptimize()} 正在扫描 ${drive} 的大文件（>50MB），请稍候...</p>`);
+    window.runLargeScan = async function(drive) {
+        document.getElementById('largeScanResult').innerHTML = `
+            <div style="text-align:center; padding:40px;">
+                <div style="font-size:36px; margin-bottom:12px; animation: spin 1s linear infinite;">⏳</div>
+                <p style="color:var(--text-secondary);">正在扫描 ${drive} 的大文件（>50MB）...</p>
+            </div>
+        `;
         try {
             const result = await eel.scan_large_files(drive, 50)();
-            if (result.error) {
-                updateModalContent(`<p style="color:red;">扫描出错：${result.error}</p>`);
+            if (result.error) { document.getElementById('largeScanResult').innerHTML = `<p style="color:red;text-align:center;">扫描出错：${result.error}</p>`; return; }
+            if (!result || result.length === 0) {
+                document.getElementById('largeScanResult').innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:30px;">🎉 未发现超过50MB的大文件，磁盘很干净！</p>';
                 return;
             }
-            if (result.length === 0) {
-                updateModalContent('<p>未发现超过50MB的大文件。</p>');
-            } else {
-                let msg = `<h4>📁 ${drive} 大文件（>50MB）</h4><pre style="white-space:pre-wrap; background:#f8f9fa; padding:10px; border-radius:6px;">`;
-                result.forEach((f, i) => {
-                    msg += `${i + 1}. ${f.name} - ${f.size_mb} MB\n   ${f.path}\n`;
-                });
-                msg += '</pre>';
-                updateModalContent(msg);
-            }
-        } catch (error) {
-            updateModalContent(`<p style="color:red;">扫描失败：${error}</p>`);
-        }
-    }
-
-    async function scanLargeFiles() {
-        showModal('📁 大文件扫描',
-            '<p>请输入要扫描的盘符：</p>' +
-            '<input id="modalDriveInput" placeholder="例如 C:" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:8px;">' +
-            '<button onclick="scanLargeFilesModal()" style="margin-top:10px;padding:8px 20px;background:#5b6af0;color:#fff;border:none;border-radius:6px;cursor:pointer;">开始扫描</button>'
-        );
-    }
-    window.scanLargeFilesModal = async function() {
-        const drive = document.getElementById('modalDriveInput').value.trim();
-        if (!drive) { alert('请输入盘符'); return; }
-        updateModalContent(`<p>${iconOptimize()} 正在扫描 ${drive} 的大文件（>50MB），请稍候...</p>`);
+            let totalSize = 0;
+            result.forEach(f => { totalSize += f.size_mb; });
+            let html = `<p style="font-weight:600; margin-bottom:12px;">找到 <b style="color:#cf222e;">${result.length}</b> 个大文件，共占用 <b style="color:#cf222e;">${totalSize.toFixed(0)} MB</b></p>`;
+            html += '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:var(--bg-secondary);"><th style="padding:8px;text-align:left;border-radius:6px 0 0 0;">文件</th><th style="padding:8px;text-align:right;width:80px;">大小</th><th style="padding:8px;text-align:center;width:60px;border-radius:0 6px 0 0;">操作</th></tr></thead><tbody>';
+            result.forEach((f, i) => {
+                const icon = f.name.match(/\.(mp4|avi|mkv|mov|wmv|flv)$/i) ? '🎬' :
+                             f.name.match(/\.(jpg|jpeg|png|gif|bmp|webp|psd)$/i) ? '🖼️' :
+                             f.name.match(/\.(zip|rar|7z|tar|gz)$/i) ? '📦' :
+                             f.name.match(/\.(exe|msi|dmg|apk)$/i) ? '⚙️' :
+                             f.name.match(/\.(iso|img)$/i) ? '💿' :
+                             f.name.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx)$/i) ? '📄' : '📁';
+                html += `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:6px 8px;" title="${f.path.replace(/"/g,'&quot;')}">${icon} ${f.name}</td>
+                    <td style="padding:6px 8px; text-align:right; color:#cf222e; font-weight:600; white-space:nowrap;">${f.size_mb} MB</td>
+                    <td style="padding:6px 8px; text-align:center;"><button class="btn btn-blue" onclick="moveSingleFile('${f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="padding:4px 10px; font-size:12px; border-radius:4px;">搬家</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('largeScanResult').innerHTML = html;
+        } catch (error) { document.getElementById('largeScanResult').innerHTML = `<p style="color:red;text-align:center;">扫描失败：${error}</p>`; }
+    };
+    window.moveSingleFile = async function(path) {
+        const name = path.split('\\').pop();
+        if (!confirm(`要将 "${name}" 移动到其他位置吗？\n\n请在弹出的文件夹选择对话框中选择目标文件夹。`)) return;
         try {
-            const result = await eel.scan_large_files(drive, 50)();
-            if (result.error) { updateModalContent(`<p style="color:red;">扫描出错：${result.error}</p>`); return; }
-            if (result.length === 0) {
-                updateModalContent('<p>未发现超过50MB的大文件。</p>');
-            } else {
-                let msg = `<h4>📁 ${drive} 大文件</h4><pre style="white-space:pre-wrap; background:#f8f9fa; padding:10px; border-radius:6px;">`;
-                result.forEach((f,i) => { msg += `${i+1}. ${f.name} - ${f.size_mb} MB\n   ${f.path}\n`; });
-                msg += '</pre>';
-                updateModalContent(msg);
+            const result = await eel.pick_folder()();
+            if (!result || !result.folder) {
+                alert('未选择目标文件夹');
+                return;
             }
-        } catch (error) { updateModalContent(`<p style="color:red;">扫描失败：${error}</p>`); }
+            const moveResult = await eel.move_file(path, result.folder)();
+            if (moveResult.success) {
+                alert(`已移动到：${moveResult.message}`);
+            } else {
+                alert('移动失败：' + (moveResult.message || '未知错误'));
+            }
+        } catch(e) {
+            alert('操作失败：' + e);
+        }
     };
 
     async function checkBootTime() {
-        showModal('⏱️ 开机耗时分析', '<p>正在分析开机信息...</p>');
+        let html = `
+            <div style="padding:20px; text-align:center;">
+                <h3 style="margin-top:0;">⏱️ 开机耗时分析</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">分析上次开机各阶段耗时，找出拖慢开机速度的元凶</p>
+                <div id="bootInfoCard" style="padding:20px;">
+                    <div style="font-size:32px; margin-bottom:12px;">⏳</div>
+                    <p>正在分析开机信息...</p>
+                </div>
+            </div>
+        `;
+        showModal('⏱️ 开机耗时分析', html);
         try {
             const info = await eel.get_boot_info()();
-            updateModalContent(`<pre style="white-space:pre-wrap;">⏱️ 本次已运行：${info.uptime}\n${iconOptimize()} 上次开机耗时：${info.last_boot_time}</pre>`);
-        } catch (error) { updateModalContent(`<p style="color:red;">分析失败：${error}</p>`); }
+            let color = '#1a7f37';
+            let icon = '✅';
+            if (info.last_boot_seconds > 60) { color = '#cf222e'; icon = '⚠️'; }
+            else if (info.last_boot_seconds > 30) { color = '#bf8700'; icon = '⚡'; }
+            document.getElementById('bootInfoCard').innerHTML = `
+                <div style="background:var(--bg-card, #f6f8fa); border-radius:12px; padding:24px; border:1px solid var(--border, #e1e4e8);">
+                    <div style="font-size:48px; margin-bottom:8px;">${icon}</div>
+                    <div style="font-size:28px; font-weight:700; color:${color};">${info.last_boot_time}</div>
+                    <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">上次开机耗时</div>
+                </div>
+                <div style="margin-top:12px; font-size:13px; color:var(--text-muted);">系统已运行：${info.uptime}</div>
+            `;
+        } catch (error) {
+            document.getElementById('bootInfoCard').innerHTML = `<p style="color:#cf222e;">分析失败：${error}</p>`;
+        }
     }
 
     async function showStartupRanking() {
@@ -1785,30 +2298,60 @@
         document.getElementById('modalBody').innerHTML = content;
     }
 
-    async     function showSystemInfo() {
-        showModal('系统信息概览', '<div style="padding:12px;">⏳ 正在获取系统信息，请稍候...</div>');
+    async function showSystemInfo() {
+        let html = `
+            <div style="padding:20px;">
+                <h3 style="margin-top:0;">🖥️ 系统信息概览</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">一键查看CPU、内存、显卡、主板型号及所有磁盘使用情况</p>
+                <div id="sysInfoContent" style="text-align:center; padding:30px;">⏳ 正在获取系统信息...</div>
+            </div>
+        `;
+        showModal('🖥️ 系统信息概览', html);
         try {
             const info = await eel.get_system_info()();
-            let html = `
-                <div class="info-grid">
-                    <div class="info-card"><span class="info-label">操作系统</span><span class="info-value">${info.os}</span></div>
-                    <div class="info-card"><span class="info-label">计算机名</span><span class="info-value">${info.hostname}</span></div>
-                    <div class="info-card"><span class="info-label">处理器</span><span class="info-value">${info.cpu}</span></div>
-                    <div class="info-card"><span class="info-label">内存总量</span><span class="info-value">${info.memory_total} GB</span></div>
-                    <div class="info-card"><span class="info-label">显卡</span><span class="info-value">${info.gpu}</span></div>
-                    <div class="info-card"><span class="info-label">主板</span><span class="info-value">${info.motherboard}</span></div>
-                </div>
-                <h4 style="margin-top:20px;">💾 磁盘</h4>
-                <table>
-                    <tr><th>盘符</th><th>总容量</th><th>已用</th><th>可用</th></tr>
-            `;
-            info.disks.forEach(d => {
-                html += `<tr><td>${d.device}</td><td>${d.total_gb} GB</td><td>${d.used_gb} GB</td><td>${d.free_gb} GB</td></tr>`;
+            // 硬件卡片
+            const hwCards = [
+                { icon: '💻', label: '操作系统', value: info.os },
+                { icon: '🖥️', label: '计算机名', value: info.hostname },
+                { icon: '⚙️', label: '处理器', value: info.cpu },
+                { icon: '🧠', label: '内存总量', value: info.memory_total + ' GB' },
+                { icon: '🎮', label: '显卡', value: info.gpu },
+                { icon: '🔧', label: '主板', value: info.motherboard },
+            ];
+            let cardsHtml = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:24px;">';
+            hwCards.forEach(c => {
+                cardsHtml += `
+                    <div style="background:var(--bg-card, #f6f8fa); border-radius:10px; padding:14px; border:1px solid var(--border, #e1e4e8);">
+                        <div style="font-size:20px; margin-bottom:4px;">${c.icon}</div>
+                        <div style="font-size:12px; color:var(--text-muted);">${c.label}</div>
+                        <div style="font-weight:600; font-size:13px; word-break:break-all;">${c.value}</div>
+                    </div>
+                `;
             });
-            html += '</table>';
-            showModal('系统信息概览', html);
+            cardsHtml += '</div>';
+            // 磁盘表格
+            let diskHtml = '<h4 style="margin-bottom:10px;">💾 磁盘信息</h4>';
+            diskHtml += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+            diskHtml += '<thead><tr style="background:var(--bg-secondary);"><th style="padding:8px;text-align:left;border-radius:6px 0 0 0;">盘符</th><th style="padding:8px;text-align:right;">总容量</th><th style="padding:8px;text-align:right;">已用</th><th style="padding:8px;text-align:right;border-radius:0 6px 0 0;">可用</th></tr></thead><tbody>';
+            info.disks.forEach((d, i) => {
+                const usedPct = d.total_gb > 0 ? (d.used_gb / d.total_gb * 100) : 0;
+                const barColor = usedPct > 90 ? '#cf222e' : (usedPct > 70 ? '#bf8700' : '#1a7f37');
+                diskHtml += `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px;"><b>${d.device}</b></td>
+                    <td style="padding:8px;text-align:right;">${d.total_gb} GB</td>
+                    <td style="padding:8px;text-align:right;">${d.used_gb} GB</td>
+                    <td style="padding:8px;text-align:right;color:${barColor};font-weight:600;">${d.free_gb} GB</td>
+                </tr>`;
+                diskHtml += `<tr><td colspan="4" style="padding:0 8px 8px;">
+                    <div style="background:var(--bg-secondary); border-radius:4px; height:6px; overflow:hidden;">
+                        <div style="width:${usedPct}%; height:100%; background:${barColor}; border-radius:4px;"></div>
+                    </div>
+                </td></tr>`;
+            });
+            diskHtml += '</tbody></table>';
+            document.getElementById('sysInfoContent').innerHTML = cardsHtml + diskHtml;
         } catch (e) {
-            showModal('系统信息', '<p>获取失败：'+e+'</p>');
+            document.getElementById('sysInfoContent').innerHTML = `<p style="color:#cf222e;">获取失败：${e}</p>`;
         }
     }
 
@@ -1816,19 +2359,17 @@
     // 盘符选择（弹窗内） ==========
     function showDriveSelector() {
         eel.get_drives()().then(drives => {
-            let html = '<h4>📊 选择要分析的盘符</h4><div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">';
+            let html = '<div style="padding:20px;"><h3 style="margin-top:0;">📊 文件夹空间分析</h3>';
+            html += '<p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">树形展示各文件夹占用空间，层层展开定位空间大户</p>';
+            html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
             drives.forEach(drive => {
-                html += `<button onclick="scanFolderTree('${drive}')" style="padding:10px;background:#f0f4ff;border:1px solid #d0d7ff;border-radius:6px;cursor:pointer;font-size:15px;">${drive}</button>`;
+                html += `<button onclick="scanFolderTree('${drive}')" style="padding:12px 24px; background:var(--bg-card,#f0f4ff); border:1px solid var(--border,#d0d7ff); border-radius:10px; cursor:pointer; font-size:15px; font-weight:500; transition:all 0.2s;">💾 ${drive}</button>`;
             });
-            html += '</div>';
+            html += '</div></div>';
             showModal('📊 文件夹空间分析', html);
         }).catch(e => {
             showModal('文件夹空间分析', `<p>获取盘符失败：${e}</p>`);
         });
-    }
-
-    function closeDriveSelector() {
-        document.getElementById('driveSelectorOverlay').style.display = 'none';
     }
 
     function formatSize(mb) {
@@ -1872,18 +2413,104 @@
         try {
             const result = await eel.ai_diagnose(question)();
             if (result.success) {
+                // 构建答案 + 来源引用 + 置信度 + 风险标签
                 const msgDiv = addChatMessage(result.answer, 'ai');
+                const bubble = msgDiv.querySelector('.msg-bubble');
+
+                // 风险标签醒目条（高风险红色警告，含备份提醒）
+                if (result.risk_label) {
+                    const sevColor = result.severity_color || '#8b949e';
+                    const isHigh = (result.severity === '高');
+                    const riskBar = document.createElement('div');
+                    riskBar.style.cssText = `margin-top:10px; padding:8px 12px; border-radius:8px; font-size:13px; font-weight:600;`
+                        + `background:${isHigh ? 'rgba(248,81,73,0.15)' : (result.severity === '低' ? 'rgba(63,185,80,0.12)' : 'rgba(210,153,34,0.12)')};`
+                        + `border-left:4px solid ${sevColor}; color:${sevColor};`;
+                    riskBar.innerHTML = `${result.risk_label}`
+                        + (isHigh ? ' &nbsp;⚠️ 此操作有风险，建议提前备份重要数据' : '');
+                    bubble.appendChild(riskBar);
+                }
+
+                // 元信息：置信度 + 匹配层级 + 来源
+                const meta = document.createElement('div');
+                meta.style.cssText = 'margin-top:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1); font-size:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;';
+                let metaHtml = '';
+                // 置信度（使用后端给出的 confidence_color）
+                const confColor = result.confidence_color || '#8b949e';
+                const confLabel = { high: '高度匹配', medium: '可能匹配', low: '低匹配' }[result.confidence] || result.confidence || '匹配';
+                const confIcon = confColor === 'green' ? '✓' : (confColor === 'orange' ? '~' : '↓');
+                metaHtml += `<span style="color:${confColor}; font-weight:bold;" title="匹配置信度">${confIcon} ${confLabel} (${result.score_percent != null ? result.score_percent : Math.round((result.score||0)*100)}%)</span>`;
+                // 匹配层级
+                if (result.layer_label) {
+                    metaHtml += `<span style="color:#8b949e;" title="匹配方式">🔍 ${escapeHtml(result.layer_label)}</span>`;
+                }
+                // 来源引用（优先使用 has_source_url / source_url）
+                if (result.source && result.source !== 'local' && result.source !== 'ai') {
+                    const srcUrl = result.has_source_url ? (result.source_url || result.source) : '';
+                    const srcDisplay = srcUrl ? srcUrl.replace(/https?:\/\//, '').substring(0, 50) + (srcUrl.length > 50 ? '...' : '') : result.source;
+                    metaHtml += srcUrl
+                        ? `<a href="${srcUrl}" target="_blank" rel="noopener" style="color:#58a6ff; text-decoration:none;" title="${escapeHtml(srcUrl)}">📎 ${escapeHtml(srcDisplay)}</a>`
+                        : `<span style="color:#8b949e;" title="参考来源">📎 来源: ${escapeHtml(result.source)}</span>`;
+                }
+                meta.innerHTML = metaHtml;
+                bubble.appendChild(meta);
+
+                // 一键复制操作指南
+                const copyBar = document.createElement('div');
+                copyBar.style.cssText = 'margin-top:8px;';
+                copyBar.innerHTML = `<button class="fb-btn copy-btn" data-copy="${encodeURIComponent(result.answer)}">📋 复制步骤</button>`;
+                copyBar.querySelector('.copy-btn').addEventListener('click', function () {
+                    const txt = decodeURIComponent(this.dataset.copy);
+                    navigator.clipboard.writeText(txt).then(
+                        () => { this.textContent = '✓ 已复制'; setTimeout(() => this.textContent = '📋 复制步骤', 1500); },
+                        () => { this.textContent = '复制失败'; }
+                    );
+                });
+                bubble.appendChild(copyBar);
+
+                // 相关推荐（“你可能还想问”）
+                if (result.candidates && result.candidates.length > 0) {
+                    const rec = document.createElement('div');
+                    rec.style.cssText = 'margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); font-size:12px;';
+                    let recHtml = `<div style="color:#8b949e; margin-bottom:4px;">💡 你可能还想问：</div>`;
+                    recHtml += '<div style="display:flex; flex-direction:column; gap:4px;">';
+                    result.candidates.slice(0, 3).forEach(c => {
+                        const q = (c.question || '').slice(0, 40);
+                        if (!q) return;
+                        recHtml += `<span class="rec-item" data-q="${escapeHtml(q)}" style="color:#58a6ff; cursor:pointer; text-decoration:underline;">• ${escapeHtml(q)}</span>`;
+                    });
+                    recHtml += '</div>';
+                    rec.innerHTML = recHtml;
+                    rec.querySelectorAll('.rec-item').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const input = document.getElementById('userInput');
+                            input.value = el.dataset.q;
+                            sendDiagnosis();
+                        });
+                    });
+                    bubble.appendChild(rec);
+                }
+
+                // 反馈区
                 if (result.knowledge_id) {
                     const fb = document.createElement('div');
                     fb.className = 'feedback-area';
+                    fb.style.marginTop = '8px';
                     fb.innerHTML = `
                         <span style="font-size:12px; color:#8b949e;">有帮助吗？</span>
-                        <button onclick="submitFeedback(${result.knowledge_id},1,'${escapeHtml(question)}')">${iconOptimize()} 有用</button>
-                        <button onclick="submitFeedback(${result.knowledge_id},0,'${escapeHtml(question)}')">${iconSettings()} 没用</button>
-                        <button class="add-knowledge-btn" onclick="showAddForm('${escapeHtml(question)}')">${iconTools()} 补充</button>
+                        <button class="fb-btn" data-fb="1" data-kid="${result.knowledge_id}">${iconOptimize()} 有用</button>
+                        <button class="fb-btn" data-fb="0" data-kid="${result.knowledge_id}">${iconSettings()} 没用</button>
+                        <button class="add-knowledge-btn fb-add">${iconTools()} 补充</button>
                     `;
-                    // 追加反馈到消息气泡内
-                    msgDiv.querySelector('.msg-bubble').appendChild(fb);
+                    fb.addEventListener('click', function (ev) {
+                        const t = ev.target.closest('button');
+                        if (!t) return;
+                        if (t.classList.contains('fb-add')) {
+                            showAddForm(question);
+                        } else if (t.classList.contains('fb-btn')) {
+                            submitFeedback(Number(t.dataset.kid), Number(t.dataset.fb), question);
+                        }
+                    });
+                    bubble.appendChild(fb);
                 }
             } else {
                 addChatMessage(result.message, 'ai');
@@ -2029,11 +2656,13 @@
 
     function showDuplicateFinder() {
         eel.get_drives()().then(drives => {
-            let html = '<h4>🔍 选择要扫描的盘符</h4><div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">';
+            let html = '<div style="padding:20px;"><h3 style="margin-top:0;">🔍 重复文件查找</h3>';
+            html += '<p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">扫描磁盘找出内容完全相同的文件，安全删除重复副本释放空间</p>';
+            html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
             drives.forEach(drive => {
-                html += `<button onclick="runDuplicateScan('${drive}')" style="padding:10px;background:#f0f4ff;border:1px solid #d0d7ff;border-radius:6px;cursor:pointer;font-size:15px;">${drive}</button>`;
+                html += `<button onclick="runDuplicateScan('${drive}')" style="padding:12px 24px; background:var(--bg-card,#f0f4ff); border:1px solid var(--border,#d0d7ff); border-radius:10px; cursor:pointer; font-size:15px; font-weight:500; transition:all 0.2s;">💾 ${drive}</button>`;
             });
-            html += '</div>';
+            html += '</div></div>';
             showModal('🔍 重复文件查找', html);
         }).catch(e => {
             showModal('重复文件查找', `<p>获取盘符失败：${e}</p>`);
@@ -2041,34 +2670,38 @@
     }
 
     async function runDuplicateScan(drive) {
-        updateModalContent(`<p>${iconOptimize()} 正在扫描 ${drive} 的重复文件（>1MB），这可能需要几分钟，请稍候...</p>`);
+        updateModalContent(`<div style="padding:30px; text-align:center;"><div style="font-size:36px; margin-bottom:12px;">🔍</div><p>正在扫描 ${drive} 的重复文件（>1MB），这可能需要几分钟...</p></div>`);
         try {
             const results = await eel.find_duplicate_files(drive, 1)();
             duplicateResults = results;
             if (results.length === 0) {
-                updateModalContent('<p>🎉 未发现重复文件，你的磁盘很干净！</p>');
+                updateModalContent('<div style="text-align:center; padding:40px;"><div style="font-size:48px; margin-bottom:12px;">🎉</div><p style="font-size:16px; color:var(--text-secondary);">未发现重复文件，你的磁盘很干净！</p></div>');
                 return;
             }
             let totalWasted = 0;
             results.forEach(r => { totalWasted += r.wasted_mb; });
-            let html = `<h3>🔍 重复文件扫描结果</h3>`;
-            html += `<p style="color:#ff4d4f;font-weight:bold;">共发现 ${results.length} 组重复文件，总计浪费 ${totalWasted.toFixed(1)} MB 空间</p>`;
+            let html = '<div style="padding:20px;">';
+            html += `<h3>🔍 重复文件扫描结果</h3>`;
+            html += `<div style="background:#fff2f0; border:1px solid #ffccc7; border-radius:8px; padding:12px; margin:12px 0; text-align:center;">
+                <span style="font-size:15px; font-weight:700; color:#cf222e;">共发现 ${results.length} 组重复文件，总计浪费 ${totalWasted.toFixed(1)} MB 空间</span>
+            </div>`;
             html += '<div style="max-height:400px;overflow-y:auto;">';
             results.forEach((group, index) => {
-                html += `<div style="background:#fff;border:1px solid #eee;border-radius:8px;padding:12px;margin-bottom:10px;">`;
-                html += `<b>📄 重复组 ${index + 1}</b> | 单个文件 ${formatSize(group.size_mb)} | 共 ${group.count} 个副本 | 浪费 ${formatSize(group.wasted_mb)}`;
-                html += '<hr style="margin:8px 0;">';
+                html += `<div style="background:var(--bg-card,#fff);border:1px solid var(--border,#eee);border-radius:8px;padding:12px;margin-bottom:10px;">`;
+                html += `<div style="font-weight:600; margin-bottom:8px;">📄 重复组 ${index + 1} <span style="color:var(--text-muted); font-weight:400;">| 单个 ${formatSize(group.size_mb)} | ${group.count} 个副本 | 浪费 ${formatSize(group.wasted_mb)}</span></div>`;
                 group.files.forEach((file, i) => {
-                    html += `<label style="display:block;font-size:13px;color:#555;margin:4px 0;">`;
-                    html += `<input type="checkbox" name="dup_${index}" value="${file}" ${i > 0 ? 'checked' : ''}> ${file}</label>`;
+                    html += `<label style="display:block;font-size:13px;color:var(--text-secondary);margin:4px 0; cursor:pointer; padding:4px 8px; border-radius:4px; background:${i===0?'var(--bg-secondary)':'transparent'};">
+                    <input type="checkbox" name="dup_${index}" data-path="${file.replace(/"/g,'&quot;')}" value="${file.replace(/"/g,'&quot;')}" ${i > 0 ? 'checked' : ''}> ${i === 0 ? '📌 保留: ' : '🗑️ '}${file}</label>`;
                 });
                 html += '</div>';
             });
             html += '</div>';
-            html += '<button onclick="deleteSelectedDuplicates()" style="margin-top:12px;background:#ff4d4f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">🗑️ 删除选中重复文件</button>';
+            html += '<div style="text-align:center; margin-top:16px;">';
+            html += '<button onclick="deleteSelectedDuplicates()" class="btn btn-red" style="padding:10px 24px; font-size:15px;">🗑️ 删除选中重复文件</button>';
+            html += '</div></div>';
             updateModalContent(html);
         } catch (e) {
-            updateModalContent(`<p style="color:red;">扫描失败：${e}</p>`);
+            updateModalContent(`<p style="color:red; text-align:center; padding:20px;">扫描失败：${e}</p>`);
         }
     }
 
@@ -2077,7 +2710,11 @@
         if (checkboxes.length === 0) { alert('请先选择要删除的文件。'); return; }
         if (!confirm(`确定要删除选中的 ${checkboxes.length} 个文件吗？此操作不可恢复！`)) return;
         const files = [];
-        checkboxes.forEach(cb => files.push(cb.value));
+        checkboxes.forEach(cb => {
+            // 使用 data-path 属性获取原始路径（DOM会自动解码HTML实体）
+            const path = cb.getAttribute('data-path') || cb.value;
+            files.push(path);
+        });
         try {
             const result = await eel.delete_selected_files(files)();
             alert(`删除完成！成功删除 ${result.deleted} 个文件。`);
@@ -2241,7 +2878,7 @@
             html += '<div style="margin-bottom:20px;"><strong>⚠️ 发现以下问题：</strong><ul style="margin-top:8px;">';
             data.issues.forEach(issue => {
                 const icon = issue.level === 'error' ? '❌' : '⚠️';
-                html += `<li style="margin-bottom:6px;">${icon} <b>${issue.name}</b>：${issue.desc}</li>`;
+                html += `<li style="margin-bottom:6px;">${icon} <b>${escapeHtml(issue.name)}</b>：${escapeHtml(issue.desc)}</li>`;
             });
             html += '</ul></div>';
         } else {
@@ -2258,8 +2895,8 @@
 
             html += `<tr style="${rowColor}">
                 <td style="padding:8px; text-align:center;">${statusIcon}</td>
-                <td style="padding:8px; font-weight:500;">${check.name}</td>
-                <td style="padding:8px; color:#656d76;">${check.desc}</td>
+                <td style="padding:8px; font-weight:500;">${escapeHtml(check.name)}</td>
+                <td style="padding:8px; color:#656d76;">${escapeHtml(check.desc)}</td>
             </tr>`;
         });
 
@@ -2291,23 +2928,40 @@
 
     // ========== 隐私清理（弹窗内交互）==========
     async function showPrivacyCleaner() {
-        showModal('隐私清理', '<p>正在加载隐私清理选项...</p>');
+        let html = `
+            <div style="padding:20px;">
+                <h3 style="margin-top:0;">🛡️ 隐私清理</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">勾选需要清理的项目，点击清理按钮一键执行</p>
+                <div id="privacyOptions" style="margin-bottom:16px;">正在加载选项...</div>
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <button onclick="selectAllPrivacy(true)" style="padding:6px 14px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:13px;">全选</button>
+                    <button onclick="selectAllPrivacy(false)" style="padding:6px 14px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:13px;">取消全选</button>
+                </div>
+                <div style="text-align:center;">
+                    <button class="btn btn-red" onclick="executePrivacyClean()" style="padding:10px 28px; font-size:15px;">🧹 开始清理</button>
+                </div>
+                <div id="privacyResult" style="margin-top:16px;"></div>
+            </div>
+        `;
+        showModal('🛡️ 隐私清理', html);
         try {
             const options = await eel.get_privacy_options()();
-            let html = '<div class="privacy-panel"><h3>${iconPrivacy()} 隐私清理</h3>';
-            html += '<p style="color:#888;margin-bottom:16px;">请选择要清理的项目</p>';
+            let optsHtml = '';
             options.forEach(opt => {
                 const checked = opt.default ? 'checked' : '';
-                html += `<div class="privacy-item"><div style="flex:1;"><label style="font-weight:500;cursor:pointer;"><input type="checkbox" class="privacy-check" value="${opt.id}" ${checked}> ${opt.name}</label><div class="privacy-desc">${opt.desc}</div></div></div>`;
+                optsHtml += `
+                    <div class="privacy-card" style="display:flex; align-items:center; padding:14px; margin-bottom:8px; background:var(--bg-card, #f6f8fa); border-radius:10px; border:1px solid var(--border, #e1e4e8);">
+                        <input type="checkbox" class="privacy-check" id="check_${opt.id}" ${checked} style="width:18px; height:18px; accent-color:#5b6af0;">
+                        <div style="margin-left:12px; flex:1;">
+                            <div style="font-weight:600;">${opt.name}</div>
+                            <div style="font-size:12px; color:var(--text-muted);">${opt.desc}</div>
+                        </div>
+                    </div>
+                `;
             });
-            html += '<div style="margin-top:20px;display:flex;gap:10px;">';
-            html += '<button onclick="selectAllPrivacy(true)" style="padding:8px 16px;background:#f0f0f0;border:1px solid #ddd;border-radius:6px;cursor:pointer;">全选</button>';
-            html += '<button onclick="selectAllPrivacy(false)" style="padding:8px 16px;background:#f0f0f0;border:1px solid #ddd;border-radius:6px;cursor:pointer;">取消全选</button>';
-            html += '<button onclick="executePrivacyClean()" style="padding:8px 20px;background:#ff6b6b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;margin-left:auto;">立即清理</button>';
-            html += '</div></div>';
-            updateModalContent(html);
+            document.getElementById('privacyOptions').innerHTML = optsHtml;
         } catch(e) {
-            updateModalContent(`<p>加载失败：${e}</p>`);
+            document.getElementById('privacyOptions').innerHTML = `<p style="color:red;">加载失败：${e}</p>`;
         }
     }
 
@@ -2317,70 +2971,117 @@
 
     async function executePrivacyClean() {
         const selected = [];
-        document.querySelectorAll('.privacy-check:checked').forEach(cb => { selected.push(cb.value); });
+        document.querySelectorAll('.privacy-check:checked').forEach(cb => { selected.push(cb.id.replace('check_','')); });
         if (selected.length === 0) { alert('请至少选择一项'); return; }
         if (!confirm(`确定要清理选中的 ${selected.length} 个项目吗？`)) return;
-        updateModalContent('<div style="text-align:center;padding:20px;">' + iconOptimize() + ' 正在清理隐私数据，请稍候...</div>');
+        document.getElementById('privacyResult').innerHTML = `
+            <div style="text-align:center; padding:20px;">
+                <div style="margin-bottom:8px;">🧹 正在清理隐私数据...</div>
+                <div style="background:var(--bg-secondary); border-radius:8px; height:8px; overflow:hidden;">
+                    <div class="progress-fill-anim" style="height:100%; width:0%; background:linear-gradient(90deg,#5b6af0,#8250df); border-radius:8px; transition:width 0.5s ease;"></div>
+                </div>
+            </div>
+        `;
+        // 模拟进度条动画
+        let prog = 0;
+        const animInterval = setInterval(() => {
+            prog += Math.random() * 15;
+            if (prog > 90) prog = 90;
+            const bar = document.querySelector('.progress-fill-anim');
+            if (bar) bar.style.width = prog + '%';
+        }, 300);
         try {
             const result = await eel.clean_privacy_items(selected)();
-            let html = '<h3>✅ 隐私清理完成</h3>';
-            html += `<p>共清理 <b>${result.total_files}</b> 个项目，释放约 <b>${result.total_size_mb.toFixed(1)} MB</b> 空间。</p>`;
+            clearInterval(animInterval);
+            const bar = document.querySelector('.progress-fill-anim');
+            if (bar) bar.style.width = '100%';
+            document.getElementById('privacyResult').innerHTML = `
+                <div style="text-align:center; padding:24px; background:linear-gradient(135deg,#f0fff4,#dcffe4); border-radius:12px; border:1px solid #b7eb8f;">
+                    <div style="font-size:36px; margin-bottom:8px;">✅</div>
+                    <p style="font-size:18px; font-weight:700; color:#1a7f37;">清理完成</p>
+                    <p style="font-size:14px; color:#656d76;">共清理 <b>${result.total_files}</b> 个项目，释放 <b>${(result.total_size_mb || 0).toFixed(1)} MB</b> 空间</p>
+                </div>
+            `;
             if (result.details && result.details.length > 0) {
-                html += '<p style="font-weight:bold;margin-top:10px;">详细结果：</p><ul>';
-                result.details.forEach(d => { html += `<li>${d}</li>`; });
-                html += '</ul>';
+                let detailsHtml = '<ul style="text-align:left; margin-top:12px; font-size:13px; color:#656d76;">';
+                result.details.forEach(d => { detailsHtml += `<li>${d}</li>`; });
+                detailsHtml += '</ul>';
+                document.getElementById('privacyResult').innerHTML += detailsHtml;
             }
-            html += '<button onclick="showPrivacyCleaner()" style="margin-top:10px;padding:8px 16px;background:#f0f0f0;border:1px solid #ddd;border-radius:6px;cursor:pointer;">返回</button>';
-            updateModalContent(html);
         } catch(e) {
-            updateModalContent(`<p>清理失败：${e}</p>`);
+            clearInterval(animInterval);
+            document.getElementById('privacyResult').innerHTML = `<p style="color:#cf222e; text-align:center;">清理失败：${e}</p>`;
         }
     }
 
     // ========== 网络修复（弹窗内交互）==========
     async function showNetworkTools() {
-        showModal('🌐 网络修复工具箱', `
-            <h3>🌐 网络修复工具箱</h3>
-            <p style="color:#888;">请选择操作：</p>
-            <div style="display:flex;flex-direction:column;gap:10px;margin-top:15px;">
-                <button onclick="runNetworkDiagnose()" style="padding:12px;background:#5b6af0;color:#fff;border:none;border-radius:8px;cursor:pointer;">🔍 一键诊断</button>
-                <button onclick="runNetworkFix()" style="padding:12px;background:#ff6b6b;color:#fff;border:none;border-radius:8px;cursor:pointer;">🔧 一键修复（需管理员权限）</button>
-                <button onclick="runSpeedTest()" style="padding:12px;background:#52c41a;color:#fff;border:none;border-radius:8px;cursor:pointer;">${iconOptimize()} 网络测速</button>
+        let html = `
+            <div style="padding:20px; text-align:center;">
+                <h3 style="margin-top:0;">🌐 网络修复</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">诊断网络问题、一键修复DNS/代理、测试网速</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:20px;">
+                    <div class="net-card" onclick="runDiagnose()" style="padding:24px 16px; background:var(--bg-card, #f6f8fa); border-radius:12px; cursor:pointer; border:1px solid var(--border, #e1e4e8); transition: all 0.2s;">
+                        <div style="font-size:36px; margin-bottom:10px;">🔍</div>
+                        <div style="font-weight:600; font-size:15px;">一键诊断</div>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">检查DNS、网关、代理</div>
+                    </div>
+                    <div class="net-card" onclick="runFix()" style="padding:24px 16px; background:var(--bg-card, #f6f8fa); border-radius:12px; cursor:pointer; border:1px solid var(--border, #e1e4e8); transition: all 0.2s;">
+                        <div style="font-size:36px; margin-bottom:10px;">🔧</div>
+                        <div style="font-weight:600; font-size:15px;">一键修复</div>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">重置DNS、刷新缓存</div>
+                    </div>
+                    <div class="net-card" onclick="runSpeedTest()" style="padding:24px 16px; background:var(--bg-card, #f6f8fa); border-radius:12px; cursor:pointer; border:1px solid var(--border, #e1e4e8); transition: all 0.2s;">
+                        <div style="font-size:36px; margin-bottom:10px;">⚡</div>
+                        <div style="font-weight:600; font-size:15px;">网络测速</div>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">测试下载上传速度</div>
+                    </div>
+                </div>
+                <div id="netResult" style="text-align:left; padding:16px; background:var(--bg-card, #f6f8fa); border-radius:12px; border:1px solid var(--border, #e1e4e8); min-height:60px; font-size:14px; color:var(--text-muted);">
+                    <p style="text-align:center;">点击上方卡片开始操作</p>
+                </div>
             </div>
-            <div id="networkSubResult" style="margin-top:15px;"></div>
-        `);
+        `;
+        showModal('🌐 网络修复', html);
+        // 卡片悬停效果
+        setTimeout(() => {
+            document.querySelectorAll('.net-card').forEach(card => {
+                card.onmouseenter = () => { card.style.borderColor = '#5b6af0'; card.style.boxShadow = '0 4px 16px rgba(91,106,240,0.15)'; };
+                card.onmouseleave = () => { card.style.borderColor = ''; card.style.boxShadow = ''; };
+            });
+        }, 100);
     }
 
-    async function runNetworkDiagnose() {
-        const subDiv = document.getElementById('networkSubResult');
-        if (subDiv) subDiv.innerHTML = '<p>正在诊断网络，请稍候...</p>';
+    async function runDiagnose() {
+        const resDiv = document.getElementById('netResult');
+        if (resDiv) resDiv.innerHTML = '<div style="text-align:center; padding:12px;">🔍 正在诊断网络...</div>';
         try {
             const result = await eel.diagnose_network()();
-            if (subDiv) subDiv.innerHTML = `<pre style="background:#f8f9fa;padding:10px;border-radius:6px;font-size:14px;white-space:pre-wrap;">${result.report}</pre>`;
+            if (resDiv) resDiv.innerHTML = `<pre style="white-space:pre-wrap; margin:0; font-size:13px; line-height:1.6;">${result.report}</pre>`;
         } catch(e) {
-            if (subDiv) subDiv.innerHTML = `<p>诊断失败：${e}</p>`;
+            if (resDiv) resDiv.innerHTML = `<p style="color:#cf222e;">诊断失败：${e}</p>`;
         }
     }
 
-    async function runNetworkFix() {
-        const subDiv = document.getElementById('networkSubResult');
-        if (subDiv) subDiv.innerHTML = '<p>正在执行网络修复，可能需要一些时间...</p>';
+    async function runFix() {
+        const resDiv = document.getElementById('netResult');
+        if (resDiv) resDiv.innerHTML = '<div style="text-align:center; padding:12px;">🔧 正在执行网络修复...</div>';
         try {
             const result = await eel.fix_network()();
-            if (subDiv) subDiv.innerHTML = `<pre style="background:#fffbe6;padding:10px;border-radius:6px;font-size:14px;white-space:pre-wrap;">${result}</pre>`;
+            if (resDiv) resDiv.innerHTML = `<pre style="white-space:pre-wrap; margin:0; font-size:13px; line-height:1.6; background:#fffbe6; padding:12px; border-radius:8px;">${result}</pre>`;
         } catch(e) {
-            if (subDiv) subDiv.innerHTML = `<p>修复失败：${e}</p>`;
+            if (resDiv) resDiv.innerHTML = `<p style="color:#cf222e;">修复失败：${e}</p>`;
         }
     }
 
     async function runSpeedTest() {
-        const subDiv = document.getElementById('networkSubResult');
-        if (subDiv) subDiv.innerHTML = '<p>正在进行测速，请稍候...</p>';
+        const resDiv = document.getElementById('netResult');
+        if (resDiv) resDiv.innerHTML = '<div style="text-align:center; padding:12px;">⚡ 正在进行测速...</div>';
         try {
             const result = await eel.network_speed_test()();
-            if (subDiv) subDiv.innerHTML = `<div style="text-align:center;padding:20px;font-size:18px;font-weight:bold;white-space:pre-line;">${result}</div>`;
+            if (resDiv) resDiv.innerHTML = `<div style="text-align:center; padding:20px; font-size:18px; font-weight:700; white-space:pre-line;">${result}</div>`;
         } catch(e) {
-            if (subDiv) subDiv.innerHTML = `<p>测速失败：${e}</p>`;
+            if (resDiv) resDiv.innerHTML = `<p style="color:#cf222e;">测速失败：${e}</p>`;
         }
     }
 
@@ -2488,7 +3189,7 @@
     }
 
     function renderStartupList(items) {
-        let html = '<div class="privacy-panel"><h3>${iconStartup()} 自启动管理</h3>';
+        let html = `<div class="privacy-panel"><h3>${iconStartup()} 自启动管理</h3>`;
         html += '<p style="color:#888;margin-bottom:16px;">管理开机自动启动的程序（需要管理员权限）</p>';
         html += '<div style="margin-bottom:10px;"><button onclick="showStartupManager()" style="padding:6px 12px;background:#f0f0f0;border:1px solid #ddd;border-radius:4px;">刷新列表</button></div>';
         html += '<div style="max-height:400px;overflow-y:auto;">';
@@ -2506,7 +3207,7 @@
                 <div style="font-size:12px;color:#888;margin-top:4px;">${item.command}</div>
                 <div style="margin-top:4px;">
                     ${actionBtn}
-                    <button onclick="locateFile('${item.exe_path}')" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">📁 定位文件</button>
+                    <button onclick="locateFile('${(item.exe_path||'').replace(/\\/g,'\\\\').replace(/'/g,\"\\'\")}')" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">📁 定位文件</button>
                     <button onclick="searchOnline('${item.name}')" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">🔍 在线搜索</button>
                 </div>
             </div>`;
@@ -2839,29 +3540,63 @@
 
     // 单独内存优化工具
     async function optimizeMemory() {
-        showModal('内存优化', '<p>正在释放内存，请稍候...</p>');
+        let html = `
+            <div style="padding:20px; text-align:center;">
+                <h3 style="margin-top:0;">🧠 内存优化</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">一键清理各进程的工作内存，释放物理内存让系统更流畅</p>
+                <button class="btn btn-blue" onclick="doOptimizeMemory()" style="padding:12px 30px; font-size:16px;">⚡ 立即优化</button>
+                <div id="memResult" style="margin-top:20px; font-size:14px;"></div>
+            </div>
+        `;
+        showModal('🧠 内存优化', html);
+    }
+    window.doOptimizeMemory = async function() {
+        document.getElementById('memResult').innerHTML = '<div style="padding:20px;">⏳ 正在释放内存，请稍候...</div>';
         try {
             const result = await eel.optimize_memory()();
-            updateModalContent('<pre style="white-space:pre-wrap;word-wrap:break-word;">' + result + '</pre>');
+            document.getElementById('memResult').innerHTML = `
+                <div style="background:linear-gradient(135deg,#f0fff4,#dcffe4); border-radius:12px; padding:20px; border:1px solid #b7eb8f;">
+                    <div style="font-size:36px; margin-bottom:8px;">✅</div>
+                    <p style="font-size:16px; font-weight:700; color:#1a7f37;">内存优化完成</p>
+                    <pre style="white-space:pre-wrap; font-size:13px; color:#656d76; text-align:left; margin-top:8px;">${result}</pre>
+                </div>
+            `;
         } catch (e) {
-            updateModalContent('<p style="color:red;">内存优化失败：' + e + '</p><p>请尝试以管理员身份运行本软件。</p>');
+            document.getElementById('memResult').innerHTML = `<p style="color:#cf222e;">内存优化失败：${e}</p><p style="font-size:12px; color:var(--text-muted);">请尝试以管理员身份运行本软件。</p>`;
         }
-    }
+    };
 
     // 系统还原点
     async function createRestorePoint() {
-        showModal('🔄 系统还原点', '<p>正在创建系统还原点，请稍候...</p>');
+        let html = `
+            <div style="padding:20px; text-align:center;">
+                <h3 style="margin-top:0;">🔄 系统还原点</h3>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">一键创建Windows系统还原点，优化前多一层安全保障</p>
+                <button class="btn btn-blue" onclick="doCreateRestorePoint()" style="padding:12px 30px; font-size:16px;">🔄 创建还原点</button>
+                <div id="restoreResult" style="margin-top:20px;"></div>
+            </div>
+        `;
+        showModal('🔄 系统还原点', html);
+    }
+    window.doCreateRestorePoint = async function() {
+        document.getElementById('restoreResult').innerHTML = '<div style="padding:20px;">⏳ 正在创建系统还原点，请稍候...</div>';
         try {
             const result = await eel.create_system_restore_point()();
             if (result.success) {
-                updateModalContent('<div style="text-align:center; padding:20px;"><p style="color:#1a7f37; font-size:16px; font-weight:600;">✅ ' + result.message + '</p><p style="color:#656d76; font-size:13px;">如果系统出现问题，可以在Windows恢复环境中使用此还原点。</p></div>');
+                document.getElementById('restoreResult').innerHTML = `
+                    <div style="background:linear-gradient(135deg,#f0fff4,#dcffe4); border-radius:12px; padding:20px; border:1px solid #b7eb8f;">
+                        <div style="font-size:36px; margin-bottom:8px;">✅</div>
+                        <p style="font-size:16px; font-weight:700; color:#1a7f37;">${result.message}</p>
+                        <p style="font-size:12px; color:#656d76; margin-top:8px;">如果系统出现问题，可以在Windows恢复环境中使用此还原点。</p>
+                    </div>
+                `;
             } else {
-                updateModalContent('<p style="color:#cf222e;">❌ ' + result.message + '</p>');
+                document.getElementById('restoreResult').innerHTML = `<p style="color:#cf222e; font-weight:600;">❌ ${result.message}</p>`;
             }
         } catch(e) {
-            updateModalContent('<p style="color:#cf222e;">创建失败：' + e + '</p>');
+            document.getElementById('restoreResult').innerHTML = `<p style="color:#cf222e;">创建失败：${e}</p>`;
         }
-    }
+    };
 
     // ==================== 设置面板功能 ====================
 
@@ -2935,8 +3670,8 @@
     // 在 initSettings 中调用初始化主题
     const origInitSettings = initSettings;
     initSettings = async function() {
-        await initTheme();
-        origInitSettings();
+        try { await initTheme(); } catch(e) {}
+        try { origInitSettings(); } catch(e) {}
     };
 
     async function checkUpdate() {
@@ -2995,34 +3730,25 @@
         event.target.value = '';
     }
 
-    // 在切换面板时初始化设置
-    const originalSwitchPanel = switchPanel;
-    switchPanel = function(panelName) {
-        originalSwitchPanel(panelName);
-        if (panelName === 'settings') {
-            initSettings();
-        }
-    };
-
     // ==================== 3D 旋转木马 ====================
     let carouselAngle = 0;
 
     const toolsList = [
-        { name: '大文件扫描', desc: '找出磁盘中的大文件', icon: iconFolder(), action: () => scanLargeFiles() },
-        { name: '重复文件查找', desc: '释放重复文件空间', icon: iconDuplicate(), action: () => showDuplicateFinder() },
-        { name: '文件夹空间分析', desc: '树形展示占用空间', icon: iconFolder(), action: () => scanFolderTree() },
-        { name: '软件卸载助手', desc: '强力卸载+残留清理', icon: iconUninstall(), action: () => showSoftwareList() },
-        { name: '隐私清理', desc: '清理浏览器/系统痕迹', icon: iconPrivacy(), action: () => showPrivacyCleaner() },
-        { name: '内存优化', desc: '一键释放物理内存', icon: iconMemory(), action: () => optimizeMemory() },
-        { name: '系统还原点', desc: '一键创建Windows还原点', icon: iconRestore(), action: () => createRestorePoint() },
-        { name: '网络修复', desc: '诊断/修复/测速', icon: iconNetwork(), action: () => showNetworkTools() },
-        { name: '右键菜单管理', desc: '清理右键菜单项', icon: iconMenu(), action: () => showContextMenuManager() },
-        { name: '自启动管理', desc: '管理开机启动程序', icon: iconStartup(), action: () => showStartupManager() },
-        { name: '网站屏蔽器', desc: '屏蔽不想看的网站', icon: iconBlock(), action: () => showSiteBlocker() },
-        { name: '开机耗时分析', desc: '分析启动耗时', icon: iconBoot(), action: () => checkBootTime() },
-        { name: '系统信息概览', desc: '查看硬件配置详情', icon: iconInfo(), action: () => showSystemInfo() },
-        { name: '文件粉碎机', desc: '彻底删除文件不可恢复', icon: iconShredder(), action: () => showFileShredder() },
-        { name: '启动盘制作', desc: 'ISO镜像写入U盘', icon: iconUSB(), action: () => showUSBWriter() },
+        { name: '大文件扫描', desc: '快速找出磁盘中超过50MB的大文件，支持一键移动释放空间', icon: iconFolder(), action: () => scanLargeFiles() },
+        { name: '重复文件查找', desc: '扫描磁盘找出内容完全相同的文件，安全删除重复副本释放空间', icon: iconDuplicate(), action: () => showDuplicateFinder() },
+        { name: '文件夹空间分析', desc: '树形展示各文件夹占用空间，层层展开定位空间大户', icon: iconFolder(), action: () => showDriveSelector() },
+        { name: '软件卸载助手', desc: '列出所有已安装软件，支持强力卸载+残留文件/注册表清理', icon: iconUninstall(), action: () => showSoftwareList() },
+        { name: '隐私清理', desc: '一键清理浏览器缓存、历史记录、微信/QQ缓存，保护隐私', icon: iconPrivacy(), action: () => showPrivacyCleaner() },
+        { name: '内存优化', desc: '一键清理各进程的工作内存，释放物理内存让系统更流畅', icon: iconMemory(), action: () => optimizeMemory() },
+        { name: '系统还原点', desc: '一键创建Windows系统还原点，优化前多一层安全保障', icon: iconRestore(), action: () => createRestorePoint() },
+        { name: '网络修复', desc: '诊断网络问题、一键修复DNS/代理、测试网速', icon: iconNetwork(), action: () => showNetworkTools() },
+        { name: '右键菜单管理', desc: '列出文件/文件夹/桌面右键菜单项，一键禁用或启用', icon: iconMenu(), action: () => showContextMenuManager() },
+        { name: '自启动管理', desc: '查看所有开机启动程序，标注影响程度，支持禁用/启用', icon: iconStartup(), action: () => showStartupManager() },
+        { name: '网站屏蔽器', desc: '一键屏蔽不想访问的网站（基于Hosts文件），支持批量添加', icon: iconBlock(), action: () => showSiteBlocker() },
+        { name: '开机耗时分析', desc: '分析上次开机各阶段耗时，找出拖慢开机速度的元凶', icon: iconBoot(), action: () => checkBootTime() },
+        { name: '系统信息概览', desc: '一键查看CPU、内存、显卡、主板型号及所有磁盘使用情况', icon: iconInfo(), action: () => showSystemInfo() },
+        { name: '文件粉碎机', desc: '多次覆写后彻底删除文件，无法恢复，适合处理隐私文件', icon: iconShredder(), action: () => showFileShredder() },
+        { name: '启动盘制作', desc: '将ISO镜像写入U盘，制作Windows/Linux系统启动盘', icon: iconUSB(), action: () => showUSBWriter() },
     ];
 
     function initCarousel() {
@@ -3129,18 +3855,6 @@
         }, { passive: false });
     }
 
-    // 切换到工具箱时初始化
-    const _origSwitchPanel = originalSwitchPanel;
-    switchPanel = function(panelName) {
-        _origSwitchPanel(panelName);
-        if (panelName === 'tools') {
-            setTimeout(initCarousel, 100);
-        }
-        if (panelName === 'settings') {
-            initSettings();
-        }
-    };
-
     // ==================== 管理员权限检测 ====================
     async function checkAdminStatus() {
         try {
@@ -3171,22 +3885,7 @@
         document.getElementById('adminWarning').style.display = 'none';
     }
 
-    // 启动画面：2.5秒后淡出
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            const splash = document.getElementById('splashScreen');
-            if (splash) {
-                splash.classList.add('fade-out');
-                splash.addEventListener('transitionend', () => { splash.remove(); });
-            }
-        }, 2500);
 
-        setTimeout(checkAdminStatus, 500);
-        setInterval(checkAdminStatus, 30000);
-        if (document.getElementById('panel-tools') && document.getElementById('panel-tools').classList.contains('active')) {
-            setTimeout(initCarousel, 100);
-        }
-    });
 
     // ==================== 文件粉碎机 ====================
     let shredderFiles = [];  // 待粉碎文件列表
@@ -3194,46 +3893,33 @@
     async function showFileShredder() {
         shredderFiles = [];
         const html = `
-            <div style="padding: 20px;">
-                <h3>🔒 文件粉碎机</h3>
-                <p style="color: #656d76; font-size: 13px; margin-bottom: 20px;">
-                    ⚠️ 粉碎后的文件<b>无法恢复</b>，请谨慎操作。<br>
-                    支持拖拽文件到下方区域，或点击选择文件。
-                </p>
-                
-                <!-- 拖拽区域 -->
-                <div id="dropZone" class="drop-zone" 
-                     ondragover="event.preventDefault(); this.style.borderColor='#0550ae';" 
-                     ondragleave="this.style.borderColor='#d0d7de';"
+            <div style="padding:20px; text-align:center;">
+                <h3 style="margin-top:0;">🔒 文件粉碎机</h3>
+                <p style="color:#cf222e; font-size:13px; margin-bottom:20px;">⚠️ 粉碎后不可恢复，请谨慎操作</p>
+                <div class="drop-zone" id="dropZone" style="padding:40px; border:2px dashed #d0d7de; border-radius:12px; background:var(--bg-card, #fafbfc); cursor:pointer; transition: all 0.2s;"
+                     ondragover="event.preventDefault(); this.style.borderColor='#0550ae'; this.style.background='#f0f6ff';"
+                     ondragleave="this.style.borderColor='#d0d7de'; this.style.background='';"
                      ondrop="handleDrop(event)">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#656d76" stroke-width="2">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#656d76" stroke-width="1.5">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                         <polyline points="17 8 12 3 7 8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
-                    <p style="color: #656d76; margin-top: 8px;">拖拽文件到此处</p>
-                    <button onclick="browseFiles()" class="setting-btn" style="margin-top: 8px;">或点击选择文件</button>
+                    <p style="color:var(--text-secondary); margin-top:10px; font-size:14px;">拖拽文件到此处</p>
+                    <p style="font-size:12px; color:var(--text-muted);">或点击下方按钮选择文件</p>
+                    <button onclick="browseFiles()" class="btn btn-outline" style="margin-top:10px; font-size:13px;">📁 选择文件</button>
                     <input type="file" id="shredFileInput" multiple style="display:none;" onchange="handleFileSelect(event)">
                 </div>
-                
-                <!-- 文件列表 -->
-                <div id="shredFileList" class="result-list" style="display: none; margin-top: 16px;">
-                    <strong>待粉碎文件：</strong>
-                    <ul id="fileListUl"></ul>
+                <div id="shredFileList" class="result-list" style="display:none; margin-top:16px; text-align:left;">
+                    <strong style="font-size:14px;">待粉碎文件：</strong>
+                    <ul id="fileListUl" style="margin-top:8px; padding-left:20px;"></ul>
                 </div>
-                
-                <!-- 粉碎按钮 -->
-                <div style="text-align: center; margin-top: 20px;">
-                    <button id="shredBtn" onclick="executeShred()" class="scan-btn" style="background: #cf222e; display: none;">
-                        🔒 粉碎所选文件
-                    </button>
-                </div>
-                
-                <!-- 结果 -->
-                <div id="shredResult" class="result-list" style="display: none; margin-top: 16px;"></div>
+                <button id="shredBtn" onclick="executeShred()" class="btn btn-red" style="display:none; margin-top:16px; padding:10px 28px; font-size:15px;">
+                    🔒 粉碎文件
+                </button>
+                <div id="shredResult" class="result-list" style="display:none; margin-top:16px;"></div>
             </div>
         `;
-        
         showModal('🔒 文件粉碎机', html);
     }
 
@@ -3246,7 +3932,8 @@
             }
         } catch(e) {
             // 降级：使用 HTML 文件选择
-            document.getElementById('shredFileInput').click();
+            var input = document.getElementById('shredFileInput');
+            if (input) input.click();
         }
     }
 
@@ -3339,6 +4026,8 @@
             resultDiv.innerHTML = `<p style="color: #cf222e;">粉碎失败：${e}</p>`;
         }
     }
+
+
 
     // ==================== 启动盘制作 ====================
     let selectedISO = null;
@@ -3471,14 +4160,6 @@
 
 </script>
 
-<!-- 盘符选择弹窗 -->
-<div class="drive-selector-overlay" id="driveSelectorOverlay">
-    <div class="drive-selector">
-        <h3>请选择要分析的盘符</h3>
-        <div class="drive-list" id="driveList"></div>
-        <div class="drive-cancel" onclick="closeDriveSelector()">取消</div>
-    </div>
-</div>
 <!-- 通用模态弹窗 -->
 <div id="modalOverlay" class="modal-overlay" onclick="closeModal()">
     <div class="modal-content" onclick="event.stopPropagation()">
@@ -3492,16 +4173,51 @@
     </div>
 </div>
 <script>
-// 处理HTML中的 ${iconXxx()} 模板调用
+// 处理HTML中的 ${iconXxx()} 模板调用（修复：递归遍历所有文本节点，覆盖静态与动态注入内容）
 (function processIconTemplates() {
-    var iconFns = { iconChat, iconOptimize, iconTools, iconSettings, iconScan, iconClean, iconMemory, iconPrivacy, iconNetwork, iconMenu, iconStartup, iconBlock, iconBoot, iconInfo, iconFolder, iconDuplicate, iconUninstall, iconShredder, iconUSB, iconCpu, iconShield, iconGpu, iconThermo };
-    document.querySelectorAll('.tab-item, .scan-btn, .feature-icon, .status-item, .setting-title, .panel h3, .logo, .header .actions button').forEach(function(el) {
+    if (typeof iconChat !== 'function') return; // 图标库未加载则跳过
+    var iconFns = { iconChat: iconChat, iconOptimize: iconOptimize, iconTools: iconTools, iconSettings: iconSettings, iconScan: iconScan, iconClean: iconClean, iconMemory: iconMemory, iconPrivacy: iconPrivacy, iconNetwork: iconNetwork, iconMenu: iconMenu, iconStartup: iconStartup, iconBlock: iconBlock, iconBoot: iconBoot, iconInfo: iconInfo, iconFolder: iconFolder, iconDuplicate: iconDuplicate, iconUninstall: iconUninstall, iconShredder: iconShredder, iconUSB: iconUSB, iconCpu: iconCpu, iconShield: iconShield, iconGpu: iconGpu, iconThermo: iconThermo, iconAppStore: iconAppStore, iconCDisk: iconCDisk };
+
+    function replaceInElement(el) {
+        if (!el) return;
+        // 处理元素自身的 innerHTML（保留子结构）
         var html = el.innerHTML;
-        var replaced = html.replace(/\$\{(icon\w+)\(\)\}/g, function(match, name) {
+        var replaced = html.replace(/\$\{(icon\w+)\(\)\}/g, function (match, name) {
             return iconFns[name] ? iconFns[name]() : match;
         });
-        if (replaced !== html) el.innerHTML = replaced;
-    });
+        if (replaced !== html) {
+            el.innerHTML = replaced;
+            return true;
+        }
+        return false;
+    }
+
+    // 递归遍历 body 下所有元素，替换其中遗留的 ${iconXxx()} 字面量
+    function walk(root) {
+        var all = root.querySelectorAll('*');
+        for (var i = 0; i < all.length; i++) {
+            replaceInElement(all[i]);
+        }
+        // 根节点自身（如直接挂在 body 上的文本）
+        replaceInElement(root);
+    }
+
+    function run() {
+        try {
+            walk(document.body);
+        } catch (e) {
+            console.error('[processIconTemplates] 执行出错:', e);
+        }
+    }
+
+    // 初次执行 + DOM 变化兜底（覆盖动态插入的节点）
+    run();
+    document.addEventListener('DOMContentLoaded', run);
+    window.addEventListener('load', run);
+    if (window.MutationObserver) {
+        var mo = new MutationObserver(function () { run(); });
+        mo.observe(document.body, { childList: true, subtree: true });
+    }
 })();
 </script>
 </body>

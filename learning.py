@@ -2,17 +2,54 @@
 电脑医生 - 自学习模块（联网增强版）
 本地匹配失败时，自动从网络搜索答案并存入知识库
 """
-
 import sqlite3
-import jieba
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import os
-import requests
-from bs4 import BeautifulSoup
+import sys
 import re
+import json
 
-DB_FILE = 'pc_doctor_knowledge.db'
+# 延迟导入重依赖（避免缺少依赖时模块崩溃）
+jieba = None
+TfidfVectorizer = None
+cosine_similarity = None
+requests_lib = None
+BeautifulSoup = None
+
+def _ensure_jieba():
+    global jieba
+    if jieba is None:
+        import jieba as _jieba
+        jieba = _jieba
+
+def _ensure_sklearn():
+    global TfidfVectorizer, cosine_similarity
+    if TfidfVectorizer is None:
+        from sklearn.feature_extraction.text import TfidfVectorizer as _Tfidf
+        from sklearn.metrics.pairwise import cosine_similarity as _cos_sim
+        TfidfVectorizer, cosine_similarity = _Tfidf, _cos_sim
+
+def _ensure_requests():
+    global requests_lib
+    if requests_lib is None:
+        import requests as _req
+        requests_lib = _req
+
+def _ensure_bs4():
+    global BeautifulSoup
+    if BeautifulSoup is None:
+        from bs4 import BeautifulSoup as _BS
+        BeautifulSoup = _BS
+
+def _knowledge_db_path():
+    """与 ai_engine.KnowledgeBridge 共用同一可写路径，避免打包后只读写入失败及双写数据分裂（bug #1/#2）"""
+    if getattr(sys, 'frozen', False):
+        appdata = os.environ.get('APPDATA') or os.path.expanduser('~')
+        folder = os.path.join(appdata, '电脑医生')
+        os.makedirs(folder, exist_ok=True)
+        return os.path.join(folder, "pc_doctor_knowledge.db")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "pc_doctor_knowledge.db")
+
+DB_FILE = _knowledge_db_path()
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE)
@@ -49,7 +86,35 @@ def init_db():
         );
     ''')
     conn.commit()
+
+    # 兼容升级：为旧表添加 tags、severity、reference 字段
+    try:
+        cursor.execute("ALTER TABLE knowledge ADD COLUMN tags TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # 字段已存在
+    try:
+        cursor.execute("ALTER TABLE knowledge ADD COLUMN severity TEXT DEFAULT '中'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE knowledge ADD COLUMN reference TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
     conn.close()
+
+    # 启动时自动导入结构化知识库 v2（含来源/标签/风险等级），避免重复导入
+    _auto_import_v2_knowledge()
+
+def _auto_import_v2_knowledge():
+    """启动时自动将 knowledge_base_v2.json 导入 SQLite（跳过已存在的问题）"""
+    try:
+        v2_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base_v2.json")
+        if os.path.exists(v2_path):
+            import_from_json(v2_path)
+            logger.info("已自动导入 knowledge_base_v2.json")
+    except Exception as e:
+        logger.warning(f"自动导入 knowledge_base_v2.json 失败: {e}")
 
 def load_knowledge_data():
     conn = get_connection()
@@ -62,6 +127,8 @@ def load_knowledge_data():
 def rebuild_vectorizer(knowledge_list):
     if not knowledge_list:
         return None, None
+    _ensure_jieba()
+    _ensure_sklearn()
     questions = [item[1] for item in knowledge_list]
     tokenized = [' '.join(jieba.cut(q)) for q in questions]
     vectorizer = TfidfVectorizer()
@@ -87,6 +154,7 @@ def match_best_answer(user_question):
 
     # 1. 先尝试核心关键词匹配（最高优先级）
     # 提取用户问题中的核心故障词
+    _ensure_jieba()
     core_keywords = ['蓝屏', '死机', '黑屏', '花屏', '重启', '关机', '卡顿', '卡', '慢', '弹窗', '广告', '没声音', '声音', '网络', '上网', 'C盘', '磁盘', '清理', '卸载', '开机', '蓝屏代码', '报错', '崩溃', '闪退']
     
     user_words = set(jieba.cut(user_question))
@@ -100,6 +168,7 @@ def match_best_answer(user_question):
                 return answer, kid, 1.0  # 返回最高置信度
 
     # 2. 如果没有关键词命中，回退到原有的 TF-IDF 相似度匹配
+    _ensure_sklearn()
     tokenized_input = ' '.join(user_words)
     input_vec = vectorizer.transform([tokenized_input])
     similarities = cosine_similarity(input_vec, tfidf_matrix).flatten()
@@ -129,8 +198,8 @@ def record_feedback(knowledge_id, is_helpful, user_question):
     conn.close()
     refresh_cache()
 
-def add_new_knowledge(question, answer, source='auto'):
-    """添加新知识，source 可以是 'user' 或 'auto'"""
+def add_new_knowledge(question, answer, source='auto', tags='', severity='中', reference=''):
+    """添加新知识，source 可以是 'user' 或 'auto'，tags 为逗号分隔的标签"""
     conn = get_connection()
     cursor = conn.cursor()
     # 检查是否已存在相同问题
@@ -139,8 +208,8 @@ def add_new_knowledge(question, answer, source='auto'):
         conn.close()
         return False
     cursor.execute(
-        "INSERT INTO knowledge (question, answer, source) VALUES (?, ?, ?)",
-        (question, answer, source)
+        "INSERT INTO knowledge (question, answer, source, tags, severity, reference) VALUES (?, ?, ?, ?, ?, ?)",
+        (question, answer, source, tags, severity, reference)
     )
     conn.commit()
     conn.close()
@@ -168,6 +237,8 @@ def log_unanswered(question):
 
 def search_web(question, num_results=3):
     """多抓取 + 白名单过滤，确保拿到有用链接"""
+    _ensure_requests()
+    _ensure_bs4()
     
     # 1. 判断是否电脑问题
     pc_keywords = [
@@ -187,12 +258,12 @@ def search_web(question, num_results=3):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     }
     query = f'{question} 解决方法'
-    search_url = f'https://www.bing.com/search?q={requests.utils.quote(query)}'
+    search_url = f'https://www.bing.com/search?q={requests_lib.utils.quote(query)}'
     
     print(f'[搜索调试] 扩展搜索: {query}')
 
     try:
-        resp = requests.get(search_url, headers=headers, timeout=10)
+        resp = requests_lib.get(search_url, headers=headers, timeout=10)
         resp.encoding = 'utf-8'
         soup = BeautifulSoup(resp.text, 'html.parser')
 
@@ -292,11 +363,19 @@ def import_from_json(json_file):
     conn = get_connection()
     cursor = conn.cursor()
     for item in data:
-        cursor.execute("SELECT id FROM knowledge WHERE question = ?", (item['question'],))
+        question = item.get('question', '')
+        if not question:
+            continue
+        cursor.execute("SELECT id FROM knowledge WHERE question = ?", (question,))
         if not cursor.fetchone():
+            answer = item.get('answer', '')
+            source = item.get('source', 'import')
+            tags = ','.join(item.get('tags', [])) if isinstance(item.get('tags'), list) else item.get('tags', '')
+            severity = item.get('severity', '中')
+            reference = item.get('reference', item.get('source', ''))
             cursor.execute(
-                "INSERT INTO knowledge (question, answer, source) VALUES (?, ?, 'import')",
-                (item['question'], item['answer'])
+                "INSERT INTO knowledge (question, answer, source, tags, severity, reference) VALUES (?, ?, ?, ?, ?, ?)",
+                (question, answer, source, tags, severity, reference)
             )
     conn.commit()
     conn.close()

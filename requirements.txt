@@ -3,3 +3,6 @@ jieba
 scikit-learn
 requests
 beautifulsoup4
+pillow
+sentence-transformers>=2.2.0
+pytest>=7.0.0

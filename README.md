@@ -50,7 +50,7 @@
 
 ### 方式一：下载安装包（推荐）
 
-👉 **[点击下载最新版安装包](https://github.com/mhr121126/PC-Doctor/releases/latest)**
+👉 **[点击下载最新版安装包](https://github.com/mhh190601/PC-Doctor/releases/latest)**
 
 下载后双击运行，按向导安装即可。  
 支持 Windows 7 及以上系统。
@@ -59,7 +59,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/mhr121126/PC-Doctor.git
+git clone https://github.com/mhh190601/PC-Doctor.git
 
 # 进入项目目录
 cd PC-Doctor
@@ -91,4 +91,4 @@ AI 智能体	scikit-learn + jieba（TF-IDF 相似度匹配）
 📄 许可证
 本项目基于 MIT 许可证开源，详情请见 LICENSE 文件。
 
-Made with ❤️ by mhr121126
+Made with ❤️ by mhh190601

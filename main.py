@@ -8,12 +8,17 @@ import json
 import eel
 import subprocess
 import shutil
+
+# Windows: 禁止子进程弹出CMD窗口（0x08000000 = CREATE_NO_WINDOW）
+CREATE_NO_WINDOW = 0x08000000
 import tempfile
 import socket
 import threading
 import psutil
 import hashlib
 import re
+import requests
+import webbrowser
 import time
 import math
 import random
@@ -95,7 +100,7 @@ def clean_temp_files():
 @eel.expose
 def run_disk_cleanup():
     try:
-        subprocess.run(['cleanmgr', '/sagerun:1'], capture_output=True, timeout=120)
+        subprocess.run(['cleanmgr', '/sagerun:1'], capture_output=True, timeout=120, creationflags=CREATE_NO_WINDOW)
         return "Windows 磁盘清理已完成。"
     except FileNotFoundError:
         return "错误：找不到磁盘清理程序，仅支持 Windows。"
@@ -172,7 +177,7 @@ def check_rogue_software():
         if os.path.exists(path):
             found.append(path)
     if found:
-        return "发现以下可疑软件目录：\n" + "\n".join(found) + "\n建议在“应用和功能”中卸载它们。"
+        return "发现以下可疑软件目录：\n" + "\n".join(found) + "\n建议在'应用和功能'中卸载它们。"
     else:
         return "未发现常见流氓软件痕迹，你的电脑很干净。"
 
@@ -254,7 +259,7 @@ def get_cpu_temperature():
         result = subprocess.run(
             ['wmic', 'path', 'Win32_PerfFormattedData_Counters_ThermalZoneInformation',
              'get', 'Temperature'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         lines = result.stdout.strip().split('\n')
         for line in lines[1:]:  # 跳过表头
@@ -271,7 +276,7 @@ def get_cpu_temperature():
         # 方法2: MSAcpi_ThermalZoneTemperature (需要管理员权限)
         result = subprocess.run(
             ['wmic', '/namespace:\\\\root\\wmi', 'PATH', 'MSAcpi_ThermalZoneTemperature', 'get', 'CurrentTemperature'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         lines = result.stdout.strip().split('\n')
         if len(lines) >= 2:
@@ -297,7 +302,7 @@ def get_gpu_temperature():
             return None
         result = subprocess.run(
             [_nvidia_smi_path, '--query-gpu=temperature.gpu', '--format=csv,noheader,nounits'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         temp_str = result.stdout.strip()
         if temp_str:
@@ -368,12 +373,12 @@ def create_system_restore_point(description="电脑医生自动还原点"):
         # 在创建还原点之前，先启用系统保护（如果未启用）
         subprocess.run(
             ['powershell', '-Command', 'Enable-ComputerRestore -Drive "C:\\"'],
-            capture_output=True, timeout=10
+            capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW
         )
         # 创建还原点
         result = subprocess.run(
             ['powershell', '-Command', f'Checkpoint-Computer -Description "{description}" -RestorePointType "MODIFY_SETTINGS"'],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW
         )
         if result.returncode == 0:
             return {"success": True, "message": f"系统还原点创建成功！\n描述：{description}"}
@@ -410,61 +415,90 @@ def run_all_optimizations():
 # ================== 自学习AI诊断接口 ==================
 @eel.expose
 def ai_diagnose(problem_description):
-    """智能诊断：先判断是否电脑问题，再查本地知识库"""
+    """智能诊断：使用 AI 引擎多层匹配（精确匹配 → 标签匹配 → 语义检索 → 关键词兜底 → 云端）"""
+    from ai_engine import get_engine, format_answer
+    engine = get_engine()
+    result = engine.ask(problem_description)
 
-    # 第一步：判断是不是电脑相关问题
-    pc_keywords = [
-        '电脑', '计算机', '笔记本', '台式', '系统', 'windows', 'win', 'mac', 'macOS',
-        '卡', '慢', '卡顿', '死机', '蓝屏', '黑屏', '花屏', '重启', '关机', '开机',
-        '内存', '硬盘', 'CPU', '显卡', '主板', '电源', '散热', '风扇', '驱动',
-        '网络', '上网', 'WiFi', 'wifi', '宽带', '路由', 'DNS', 'IP',
-        '病毒', '杀毒', '防火墙', '安全', '弹窗', '广告', '流氓', '软件',
-        'C盘', 'D盘', '磁盘', '空间', '清理', '优化', '卡死', '闪退', '崩溃', '报错',
-        '安装', '卸载', '更新', '升级', '浏览器', '输入法', '办公', '游戏',
-        '声音', '没声音', '画面', '鼠标', '键盘', '屏幕', '分辨率'
-    ]
-    
-    is_pc_related = any(keyword in problem_description for keyword in pc_keywords)
+    # 判断是否电脑问题（非电脑相关 + fallback → 友好提示）
+    if not result["success"] and result["layer"] == "fallback":
+        from ai_engine import AIEngine  # noqa
+        pc_keywords = [
+            '电脑', '计算机', '笔记本', '台式', '系统', 'windows', 'win',
+            '卡', '慢', '卡顿', '死机', '蓝屏', '黑屏', '花屏', '重启', '关机', '开机',
+            '内存', '硬盘', 'CPU', '显卡', '主板', '电源', '散热', '风扇', '驱动',
+            '网络', '上网', 'WiFi', 'wifi', '宽带', '路由', 'DNS', 'IP',
+            '病毒', '杀毒', '防火墙', '安全', '弹窗', '广告', '流氓', '软件',
+            'C盘', 'D盘', '磁盘', '空间', '清理', '优化', '卡死', '闪退', '崩溃', '报错',
+            '安装', '卸载', '更新', '升级', '浏览器', '输入法', '办公', '游戏',
+            '声音', '没声音', '画面', '鼠标', '键盘', '屏幕', '分辨率',
+            '0x', 'dll', '错误', '代码', '蓝屏代码', '风扇声音', '温度', '图标'
+        ]
+        if not any(kw in problem_description.lower() for kw in pc_keywords):
+            result = format_answer({
+                "success": True,
+                "answer": "👋 你好！我是电脑医生，只擅长回答电脑相关问题哦。\n\n请描述你的电脑遇到了什么问题，比如：\n• 电脑卡顿怎么办\n• C盘满了如何清理\n• 电脑蓝屏了怎么解决",
+                "layer": "greeting",
+                "type": "greeting",
+                "score": 1.0,
+                "confidence": "high",
+                "source": "电脑医生",
+                "tags": "",
+                "severity": "",
+                "layer_label": "友好提示",
+            })
+            return _pack_ai_result(result)
 
-    if not is_pc_related:
-        # 非电脑问题，直接给出友好提示
-        return {
-            "success": True,
-            "answer": "👋 你好！我是电脑医生，只擅长回答电脑相关问题哦。\n\n请描述你的电脑遇到了什么问题，比如：\n• 电脑卡顿怎么办\n• C盘满了如何清理\n• 电脑蓝屏了怎么解决",
-            "knowledge_id": None,
-            "score": 0,
-            "source": "local"
-        }
+    return _pack_ai_result(result)
 
-    # 第二步：是电脑问题，查本地知识库
-    answer, knowledge_id, score = learning.match_best_answer(problem_description)
 
-    if answer:
-        return {
-            "success": True,
-            "answer": answer,
-            "knowledge_id": knowledge_id,
-            "score": score,
-            "source": "local"
-        }
-    else:
-        # 知识库没匹配到
-        return {
-            "success": False,
-            "message": "抱歉，我暂时没有遇到这个问题。你可以尝试左侧的优化工具，或者换个更具体的问法。",
-            "knowledge_id": None
-        }
+def _pack_ai_result(result: dict) -> dict:
+    """将 ai_engine 的结构化结果打包成前端需要的字段"""
+    return {
+        "success": result.get("success", False),
+        "answer": result.get("answer", "") if result.get("success") else "",
+        "message": "" if result.get("success") else result.get("answer", ""),
+        "knowledge_id": result.get("knowledge_id"),
+        "score": result.get("score", 0),
+        "source": result.get("source", ""),
+        "confidence": result.get("confidence", "low"),
+        "tags": result.get("tags", ""),
+        "severity": result.get("severity", ""),
+        # 新增：前端增强展示字段
+        "score_percent": result.get("score_percent", int(round(float(result.get("score", 0)) * 100))),
+        "confidence_color": result.get("confidence_color", "red"),
+        "risk_label": result.get("risk_label", ""),
+        "severity_color": result.get("severity_color", ""),
+        "has_source_url": result.get("has_source_url", False),
+        "source_url": result.get("source_url", ""),
+        "layer_label": result.get("layer_label", ""),
+        "matched_tags": result.get("matched_tags", ""),
+        "model_note": result.get("model_note", ""),
+        "candidates": result.get("candidates", []),
+    }
 
 @eel.expose
 def submit_feedback(knowledge_id, is_helpful, user_question):
-    """提交用户反馈"""
-    learning.record_feedback(knowledge_id, is_helpful, user_question)
+    """提交用户反馈（由 AIEngine 统一处理权重/日志/统计，避免与 learning 双写冲突，bug #2）"""
+    try:
+        from ai_engine import get_engine
+        engine = get_engine()
+        engine.feedback(knowledge_id, is_helpful, user_question)
+    except Exception as e:
+        logger.error(f"提交反馈失败: {e}")
+        return "反馈记录失败，请稍后再试"
     return "反馈已记录，感谢你的帮助！"
 
 @eel.expose
 def add_user_knowledge(question, answer):
-    """用户补充新知识"""
-    learning.add_new_knowledge(question, answer)
+    """用户补充新知识（由 AIEngine 统一写入，避免与 learning 双写）"""
+    try:
+        from ai_engine import get_engine
+        engine = get_engine()
+        engine.add_knowledge(question, answer, source='用户贡献', tags='用户贡献', severity='中')
+    except Exception as e:
+        logger.error(f"补充知识失败: {e}")
+        return "新知识录入失败，请稍后再试"
     return "新知识已录入，谢谢你的贡献！"
 
 # ================== 综合体检功能 ==================
@@ -841,7 +875,7 @@ def diagnose_network():
 
     # 1. 检查网络适配器状态
     try:
-        result = subprocess.run(['ipconfig'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['ipconfig'], capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW)
         if 'Media disconnected' in result.stdout or '媒体已断开' in result.stdout:
             report.append("⚠️ 有网卡未连接（可能正常）。")
             status = "warning"
@@ -853,7 +887,7 @@ def diagnose_network():
 
     # 2. Ping 百度检查连通性
     try:
-        ping_result = subprocess.run(['ping', 'www.baidu.com', '-n', '2'], capture_output=True, text=True, timeout=10)
+        ping_result = subprocess.run(['ping', 'www.baidu.com', '-n', '2'], capture_output=True, text=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         if 'TTL=' in ping_result.stdout:
             match = re.search(r'Average = (\d+)ms', ping_result.stdout)
             if match:
@@ -895,26 +929,26 @@ def fix_network():
     """一键修复常见网络问题（需要管理员权限）"""
     fixes = []
     try:
-        subprocess.run(['ipconfig', '/release'], capture_output=True, timeout=10)
-        subprocess.run(['ipconfig', '/renew'], capture_output=True, timeout=30)
+        subprocess.run(['ipconfig', '/release'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
+        subprocess.run(['ipconfig', '/renew'], capture_output=True, timeout=30, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已释放并更新IP地址。")
     except:
         fixes.append("❌ IP更新失败，请手动操作。")
 
     try:
-        subprocess.run(['ipconfig', '/flushdns'], capture_output=True, timeout=10)
+        subprocess.run(['ipconfig', '/flushdns'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已刷新DNS缓存。")
     except:
         fixes.append("❌ DNS刷新失败。")
 
     try:
-        subprocess.run(['netsh', 'winsock', 'reset'], capture_output=True, timeout=10)
+        subprocess.run(['netsh', 'winsock', 'reset'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已重置Winsock目录。")
     except:
         fixes.append("❌ Winsock重置失败。")
 
     try:
-        subprocess.run(['netsh', 'int', 'ip', 'reset'], capture_output=True, timeout=10)
+        subprocess.run(['netsh', 'int', 'ip', 'reset'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已重置TCP/IP协议栈。")
     except:
         fixes.append("❌ TCP/IP重置失败。")
@@ -1305,12 +1339,12 @@ def locate_file(file_path):
     """打开文件所在目录并选中"""
     try:
         if os.path.exists(file_path):
-            subprocess.Popen(['explorer', '/select,', file_path])
+            subprocess.Popen(['explorer', '/select,', file_path], creationflags=CREATE_NO_WINDOW)
         else:
             # 如果文件不存在，尝试打开所在目录
             parent = os.path.dirname(file_path)
             if os.path.exists(parent):
-                subprocess.Popen(['explorer', parent])
+                subprocess.Popen(['explorer', parent], creationflags=CREATE_NO_WINDOW)
         return True
     except:
         return False
@@ -1469,8 +1503,113 @@ def add_hosts_entry(ip, domain):
 # ==================== 设置面板相关 ====================
 
 # 当前版本号（每次发版时手动更新）
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 GITHUB_REPO = "mhr121126/PC-Doctor"
+
+
+
+
+# ============================================================
+# 子程序管理（C盘救星 内置安装版）
+# ============================================================
+
+@eel.expose
+def check_network():
+    """检测是否能连接互联网"""
+    try:
+        socket.create_connection(("www.baidu.com", 80), timeout=3)
+        return True
+    except:
+        return False
+
+
+def get_tools_dir():
+    """获取子程序存放目录：%APPDATA%/电脑医生/tools"""
+    return os.path.join(os.getenv('APPDATA'), '电脑医生', 'tools')
+
+
+@eel.expose
+def is_cdisksaver_installed():
+    """检查目标路径是否存在C盘救星.exe"""
+    target = os.path.join(get_tools_dir(), 'C盘救星.exe')
+    return os.path.exists(target)
+
+
+@eel.expose
+def install_cdisksaver():
+    """将打包内置的C盘救星复制到 %APPDATA%/电脑医生/tools"""
+    # 1. 联网检测
+    if not check_network():
+        return {"success": False, "offline": True, "message": "未连接互联网，无法下载"}
+
+    tools_dir = get_tools_dir()
+    target = os.path.join(tools_dir, 'C盘救星.exe')
+
+    if os.path.exists(target):
+        return {"success": True, "message": "已安装"}
+
+    # 2. 定位源文件
+    # 打包后：临时目录/tools/C盘救星.exe
+    # 源码运行：项目目录/tools/C盘救星.exe
+    if getattr(sys, 'frozen', False):
+        source = os.path.join(sys._MEIPASS, 'tools', 'C盘救星.exe')
+    else:
+        source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'C盘救星.exe')
+
+    if not os.path.exists(source):
+        return {"success": False, "message": "源文件丢失，请重新安装电脑医生"}
+
+    # 3. 复制到目标目录
+    os.makedirs(tools_dir, exist_ok=True)
+    try:
+        shutil.copy2(source, target)
+        # 模拟下载延迟，让进度条更自然
+        time.sleep(1.5)
+        return {"success": True, "message": "安装成功"}
+    except Exception as e:
+        return {"success": False, "message": f"安装失败：{e}"}
+
+
+@eel.expose
+def launch_cdisksaver():
+    """启动C盘救星"""
+    target = os.path.join(get_tools_dir(), 'C盘救星.exe')
+    print(f"[C盘救星] 目标: {target}", flush=True)
+    print(f"[C盘救星] 存在: {os.path.exists(target)}", flush=True)
+    print(f"[C盘救星] 大小: {os.path.getsize(target) if os.path.exists(target) else 'N/A'}", flush=True)
+
+    if not os.path.exists(target):
+        print(f"[C盘救星] 文件不存在！", flush=True)
+        return {"success": False, "message": "C盘救星未安装，请先下载"}
+
+    # 方法1: os.startfile（Windows原生，最可靠）
+    try:
+        print(f"[C盘救星] 尝试 os.startfile...", flush=True)
+        os.startfile(target)
+        print(f"[C盘救星] os.startfile 成功！", flush=True)
+        return {"success": True, "message": "C盘救星已启动"}
+    except Exception as e:
+        print(f"[C盘救星] os.startfile 失败: {e}", flush=True)
+
+    # 方法2: subprocess.Popen（不带 shell，list 方式）
+    try:
+        print(f"[C盘救星] 尝试 Popen(list)...", flush=True)
+        subprocess.Popen([target], cwd=os.path.dirname(target))
+        print(f"[C盘救星] Popen(list) 成功！", flush=True)
+        return {"success": True, "message": "C盘救星已启动"}
+    except Exception as e2:
+        print(f"[C盘救星] Popen(list) 失败: {e2}", flush=True)
+
+    # 方法3: subprocess.Popen（带 shell）
+    try:
+        print(f"[C盘救星] 尝试 Popen(shell)...", flush=True)
+        subprocess.Popen(f'"{target}"', shell=True, cwd=os.path.dirname(target))
+        print(f"[C盘救星] Popen(shell) 成功！", flush=True)
+        return {"success": True, "message": "C盘救星已启动"}
+    except Exception as e3:
+        print(f"[C盘救星] 所有方法均失败: {e3}", flush=True)
+        return {"success": False, "message": f"启动失败：{e3}"}
+
 
 @eel.expose
 def get_app_info():
@@ -1550,7 +1689,7 @@ def set_autostart(enabled):
             $Shortcut.WorkingDirectory = '{os.path.dirname(exe_path)}'
             $Shortcut.Save()
             """
-            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, timeout=5)
+            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW)
             return {"success": True, "message": "已设置开机自启"}
         except Exception as e:
             return {"success": False, "message": str(e)}
@@ -1656,6 +1795,83 @@ def scan_large_files(drive="C:", min_size_mb=50):
     print(f'[扫描完成] 共扫描 {scanned_count} 个文件，找到 {len(results)} 个大文件。')
     return results[:100]
 
+# ================== C盘救星面板接口 ==================
+@eel.expose
+def get_c_disk_info():
+    """获取C盘空间信息"""
+    try:
+        usage = psutil.disk_usage('C:\\')
+        return {
+            'total_gb': round(usage.total / (1024**3), 1),
+            'used_gb': round(usage.used / (1024**3), 1),
+            'free_gb': round(usage.free / (1024**3), 1),
+            'percent': usage.percent
+        }
+    except:
+        return None
+
+
+@eel.expose
+def one_click_clean():
+    """一键清理C盘：临时文件 + 磁盘清理"""
+    r1 = clean_temp_files()
+    r2 = run_disk_cleanup()
+    return f"{r1}\n{r2}"
+
+
+@eel.expose
+def pick_folder():
+    """弹出文件夹选择对话框，返回选中的文件夹路径"""
+    import tkinter.filedialog as fd
+    import tkinter as tk
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    folder = fd.askdirectory(title="选择目标文件夹")
+    root.destroy()
+    if folder:
+        return {"folder": folder}
+    return {"folder": None}
+
+@eel.expose
+def move_file(source, target_dir):
+    """移动文件到指定目录"""
+    try:
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir, exist_ok=True)
+        filename = os.path.basename(source)
+        dest = os.path.join(target_dir, filename)
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        while os.path.exists(dest):
+            dest = os.path.join(target_dir, f"{base}_{counter}{ext}")
+            counter += 1
+        shutil.move(source, dest)
+        return {"success": True, "message": f"已移动到 {dest}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+@eel.expose
+def get_top_folders(drive="C:\\"):
+    """获取C盘根目录下最大的文件夹"""
+    results = []
+    skip = {'Windows', '$Recycle.Bin', 'System Volume Information', 'Recovery'}
+    try:
+        for entry in os.scandir(drive):
+            if entry.name in skip or not entry.is_dir():
+                continue
+            size = get_folder_size(entry.path)
+            results.append({
+                'name': entry.name,
+                'size_mb': round(size / (1024 * 1024), 1)
+            })
+    except:
+        pass
+    results.sort(key=lambda x: x['size_mb'], reverse=True)
+    return results[:10]
+
+
 @eel.expose
 def get_boot_info():
     """获取本次开机时长和上次开机耗时"""
@@ -1676,7 +1892,7 @@ def get_boot_info():
     try:
         # 使用PowerShell查询最近两次启动事件
         cmd = 'powershell -Command "Get-WinEvent -FilterHashtable @{LogName=\'System\'; ID=100} -MaxEvents 2 | Select-Object -ExpandProperty TimeCreated"'
-        output = subprocess.check_output(cmd, shell=True, text=True)
+        output = subprocess.check_output(cmd, shell=True, text=True, creationflags=CREATE_NO_WINDOW)
         times = output.strip().split('\n')
         if len(times) >= 2:
             # 解析时间字符串，计算差值
@@ -1688,13 +1904,17 @@ def get_boot_info():
             total_seconds = boot_duration.total_seconds()
             if total_seconds < 300:  # 小于5分钟通常表示快速启动或异常
                 info['last_boot_time'] = "快速启动模式，开机耗时极短"
+                info['last_boot_seconds'] = total_seconds
             else:
                 mins, secs = divmod(total_seconds, 60)
                 info['last_boot_time'] = f"{int(mins)}分钟{int(secs)}秒"
+                info['last_boot_seconds'] = total_seconds
         else:
             info['last_boot_time'] = "数据不足，请重启后再试"
+            info['last_boot_seconds'] = 0
     except:
         info['last_boot_time'] = "无法获取（可能需要管理员权限）"
+        info['last_boot_seconds'] = 0
     
     return info
 
@@ -1813,7 +2033,7 @@ def get_system_info():
         # 尝试通过 wmic 获取更友好的名称
         result = subprocess.run(
             ['wmic', 'cpu', 'get', 'Name'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
         if len(lines) > 1:
@@ -1834,7 +2054,7 @@ def get_system_info():
     try:
         result = subprocess.run(
             ['wmic', 'path', 'win32_videocontroller', 'get', 'name'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
         # 过滤掉虚拟设备、微软基本显示适配器
@@ -1856,7 +2076,7 @@ def get_system_info():
     try:
         result = subprocess.run(
             ['wmic', 'baseboard', 'get', 'product'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, creationflags=CREATE_NO_WINDOW
         )
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
         info['motherboard'] = lines[1] if len(lines) > 1 else "未知"
@@ -2046,7 +2266,7 @@ def uninstall_software(uninstall_string, software_name):
     try:
         # 有些卸载命令需要加参数实现静默卸载，这里不做强制，直接执行
         # 在 Windows 中，通常卸载命令会弹出界面，需要用户交互，我们只能等待
-        process = subprocess.Popen(uninstall_string, shell=True)
+        process = subprocess.Popen(uninstall_string, shell=True, creationflags=CREATE_NO_WINDOW)
         process.wait()
         return {"success": True, "message": f"{software_name} 卸载完成。"}
     except Exception as e:
@@ -2346,7 +2566,7 @@ def get_removable_drives():
         result = subprocess.run(
             ['powershell', '-Command', 
              'Get-WmiObject -Class Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 } | ForEach-Object { Write-Output "$($_.DeviceID)|$($_.VolumeName)|$([math]::Round($_.Size/1GB,1))" }'],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10, creationflags=CREATE_NO_WINDOW
         )
         lines = result.stdout.strip().split('\n')
         for line in lines:
@@ -2392,7 +2612,7 @@ def write_iso_to_usb(iso_path, target_drive):
         """
         result = subprocess.run(
             ['powershell', '-Command', ps_script],
-            capture_output=True, text=True, timeout=1800
+            capture_output=True, text=True, timeout=1800, creationflags=CREATE_NO_WINDOW
         )
         if "SUCCESS" in result.stdout:
             return {"success": True, "message": f"启动盘制作成功！\n已将ISO内容写入 {target_drive}: 盘。"}
@@ -2422,7 +2642,8 @@ def show_splash(duration=2800):
     root.configure(bg='black')
     root.wm_attributes('-transparentcolor', 'black')
 
-    win_w, win_h = 360, 420
+    # 窗口尺寸：正方形构图，Logo 居中偏上，下方留文字空间
+    win_w, win_h = 380, 440
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
     x = (sw - win_w) // 2
@@ -2432,49 +2653,54 @@ def show_splash(duration=2800):
     canvas = tk.Canvas(root, width=win_w, height=win_h, bg='black', highlightthickness=0)
     canvas.pack()
 
-    # 加载原始 Logo（不做 PhotoImage，只保留 PIL 对象用于逐像素处理）
+    # ====== 构图参数 ======
+    # Logo 区域：取窗口上半部分的正方形区域
+    logo_size = 180                              # Logo 渲染尺寸
+    logo_center_x = win_w // 2                   # 水平居中
+    logo_center_y = win_h // 2 - 35              # 垂直偏上，为下方文字留空间
+    # Logo 包围盒：用于粒子环绕
+    logo_top = logo_center_y - logo_size // 2
+    logo_bottom = logo_center_y + logo_size // 2
+    logo_left = logo_center_x - logo_size // 2
+    logo_right = logo_center_x + logo_size // 2
+    # 文字位置：紧贴 Logo 下方
+    text_y_main = logo_bottom + 28               # "电脑医生"
+    text_y_sub = text_y_main + 38                # "PC Doctor"
+
+    # 加载原始 Logo
     base_logo = None
     try:
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'my_logo.ico')
-        img = Image.open(logo_path)
-        img.seek(0)
-        sizes = []
-        try:
-            while True:
-                sizes.append(img.size)
-                img.seek(img.tell() + 1)
-        except EOFError:
-            pass
-        if sizes:
-            img.seek(sizes.index(max(sizes)))
+        if getattr(sys, 'frozen', False):
+            logo_path = os.path.join(sys._MEIPASS, 'my_logo.ico')
         else:
-            img.seek(0)
-        base_logo = img.resize((160, 160), Image.Resampling.LANCZOS).convert('RGBA')
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'my_logo.ico')
+        img = Image.open(logo_path)
+        # 直接取第一帧（通常就是最大尺寸）
+        base_logo = img.resize((logo_size, logo_size), Image.Resampling.LANCZOS).convert('RGBA')
     except:
         pass
 
-    # 粒子系统
+    # 粒子系统：围绕 Logo 区域环形分布
     particles = []
     def spawn_particle():
-        cx, cy = win_w // 2, 150
+        cx, cy = logo_center_x, logo_center_y
         angle = random.uniform(0, 2 * math.pi)
-        dist = random.uniform(50, 100)
-        px = cx + dist * math.cos(angle)
-        py = cy + dist * math.sin(angle)
+        # 粒子在 Logo 包围盒外缘生成
+        radius_x = logo_size // 2 + random.randint(10, 40)
+        radius_y = logo_size // 2 + random.randint(10, 40)
+        px = cx + radius_x * math.cos(angle)
+        py = cy + radius_y * math.sin(angle)
         vx = random.uniform(-0.3, 0.3)
-        vy = random.uniform(-0.8, -0.2)
-        life = random.uniform(1.5, 2.5)
-        particles.append([px, py, vx, vy, random.randint(1, 2), 0.0, life])
+        vy = random.uniform(-0.9, -0.2)          # 向上飘
+        life = random.uniform(1.8, 3.2)
+        size = random.randint(2, 4)
+        particles.append([px, py, vx, vy, size, 0.0, life])
 
     last_spawn = time.time()
-    max_particles = 25
+    max_particles = 35
     start_time = time.time()
 
-    # Logo 中心位置
-    logo_center_x = win_w // 2
-    logo_center_y = 150
-
-    def create_highlighted_logo(highlight_y_ratio, highlight_width_ratio=0.15):
+    def create_highlighted_logo(highlight_y_ratio, highlight_width_ratio=0.12):
         """根据高亮在 Logo 中的相对位置（0~1），返回带亮度渐变的 PhotoImage"""
         if base_logo is None:
             return None
@@ -2489,7 +2715,7 @@ def show_splash(duration=2800):
             dist = abs(py - highlight_center)
             if dist < half_width:
                 factor = 1.0 - (dist / half_width)
-                brightness_boost = 1.0 + factor * 0.8  # 最高提亮 80%
+                brightness_boost = 1.0 + factor * 0.8
                 for px in range(w):
                     r, g, b, a = pixels[px, py]
                     if a > 0:
@@ -2510,24 +2736,24 @@ def show_splash(duration=2800):
         # 整体淡入
         alpha = 1 - (1 - t) ** 3
 
-        # 高亮扫描：来回扫动，约 1.2 秒一个方向
+        # 高亮扫描：来回扫动
         scan_speed = 1.2
         scan_progress = (elapsed / scan_speed) % 1.0
         if int(elapsed / scan_speed) % 2 == 0:
-            highlight_pos = scan_progress  # 上→下
+            highlight_pos = scan_progress   # 上 → 下
         else:
-            highlight_pos = 1.0 - scan_progress  # 下→上
+            highlight_pos = 1.0 - scan_progress  # 下 → 上
 
-        # Logo + 高亮（始终绘制）
+        # Logo + 高亮扫描效果
         if base_logo is not None:
             highlighted = create_highlighted_logo(highlight_pos, highlight_width_ratio=0.12)
             if highlighted is not None:
                 canvas.create_image(logo_center_x, logo_center_y, image=highlighted)
                 canvas.highlighted_ref = highlighted
 
-        # 微粒子
+        # 微粒子（围绕 Logo 区域）
         now = time.time()
-        if len(particles) < max_particles and now - last_spawn > 0.08:
+        if len(particles) < max_particles and now - last_spawn > 0.10:
             spawn_particle()
             last_spawn = now
 
@@ -2540,16 +2766,28 @@ def show_splash(duration=2800):
                 particles.remove(p)
                 continue
             particle_alpha = min(life_ratio * 2, 2 - life_ratio * 2) * alpha
-            rv = int(255 * particle_alpha)
-            canvas.create_oval(p[0] - p[4], p[1] - p[4], p[0] + p[4], p[1] + p[4], fill=f'#{rv:02x}{rv:02x}{rv:02x}', outline='')
+            # 光晕层
+            glow_alpha = int(255 * particle_alpha * 0.35)
+            glow_color = f'#{glow_alpha:02x}{glow_alpha:02x}{glow_alpha:02x}'
+            canvas.create_oval(p[0] - p[4] - 3, p[1] - p[4] - 3,
+                               p[0] + p[4] + 3, p[1] + p[4] + 3,
+                               fill=glow_color, outline='', tags='particle')
+            # 核心
+            core_alpha = min(255, int(255 * particle_alpha * 1.3))
+            core_color = f'#{core_alpha:02x}{core_alpha:02x}{core_alpha:02x}'
+            canvas.create_oval(p[0] - p[4], p[1] - p[4],
+                               p[0] + p[4], p[1] + p[4],
+                               fill=core_color, outline='', tags='particle')
 
-        # 文字（始终绘制，颜色带淡入）
+        # 文字（紧跟 Logo 下方）
         rv = int(255 * alpha)
         text_color = f'#{rv:02x}{rv:02x}{rv:02x}'
-        canvas.create_text(win_w // 2, 310, text="电脑医生", font=("Microsoft YaHei", 20, "bold"), fill=text_color)
+        canvas.create_text(win_w // 2, text_y_main,
+                           text="电脑医生", font=("Microsoft YaHei", 20, "bold"), fill=text_color)
         rv2 = int(255 * alpha * 0.7)
         sub_color = f'#{rv2:02x}{rv2:02x}{rv2:02x}'
-        canvas.create_text(win_w // 2, 345, text="PC Doctor", font=("Microsoft YaHei", 12), fill=sub_color)
+        canvas.create_text(win_w // 2, text_y_sub,
+                           text="PC Doctor", font=("Microsoft YaHei", 12), fill=sub_color)
 
         if t < 1.0:
             root.after(30, update)
@@ -2562,6 +2800,39 @@ def show_splash(duration=2800):
 def force_exit(page=None, sockets=None):
     """强制退出整个 Python 进程（忽略 Eel 传来的参数）"""
     os._exit(0)
+
+@eel.expose
+def check_c_disk_saver():
+    """检测C盘救星是否已安装"""
+    paths = [
+        os.path.join(os.path.dirname(sys.executable), 'C盘救星.exe'),
+        r'C:\Program Files\C盘救星\C盘救星.exe',
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return {"installed": True, "path": p}
+    return {"installed": False}
+
+
+@eel.expose
+def launch_c_disk_saver():
+    """启动C盘救星"""
+    paths = [
+        os.path.join(os.path.dirname(sys.executable), 'C盘救星.exe'),
+        r'C:\Program Files\C盘救星\C盘救星.exe',
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            subprocess.Popen(p, creationflags=CREATE_NO_WINDOW)
+            return
+
+
+
+
+@eel.expose
+def open_url(url):
+    webbrowser.open(url)
+
 
 @eel.expose
 def exit_app():
@@ -2577,9 +2848,12 @@ if __name__ == '__main__':
     t = threading.Thread(target=start_monitor, daemon=True)
     t.start()
     
-    # 3. 如果知识库为空且存在JSON文件，自动导入
-    if not learning.load_knowledge_data() and os.path.exists('knowledge_base.json'):
-        learning.import_from_json('knowledge_base.json')
+    # 3. 如果知识库为空且存在JSON文件，自动导入（优先 v2 新格式）
+    if not learning.load_knowledge_data():
+        if os.path.exists('knowledge_base_v2.json'):
+            learning.import_from_json('knowledge_base_v2.json')
+        elif os.path.exists('knowledge_base.json'):
+            learning.import_from_json('knowledge_base.json')
     
     # 4. 启动 Eel 主窗口
     import traceback
