@@ -7,6 +7,9 @@ import os
 import sys
 import re
 import json
+import logging
+
+logger = logging.getLogger('pc_doctor')
 
 # 延迟导入重依赖（避免缺少依赖时模块崩溃）
 jieba = None
@@ -189,7 +192,8 @@ def record_feedback(knowledge_id, is_helpful, user_question):
         "INSERT INTO feedback (knowledge_id, is_helpful, user_question) VALUES (?, ?, ?)",
         (knowledge_id, is_helpful, user_question)
     )
-    weight_change = 0.1 if is_helpful else -0.1
+    # 调整知识权重（与 ai_engine 保持一致：+0.1 / -0.2）
+    weight_change = 0.1 if is_helpful else -0.2
     cursor.execute(
         "UPDATE knowledge SET weight = MAX(0, weight + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (weight_change, knowledge_id)

@@ -18,6 +18,7 @@
 import os
 import sys
 import json
+import re
 import time
 import logging
 import shutil
@@ -609,12 +610,23 @@ class TagMatcher:
             r.pop("sort_key", None)
         return results[:top_k]
 
-    def update_weight(self, doc_id: int, weight: float):
+    def update_weight(self, doc_id: int, weight: float) -> bool:
         for doc in self.documents:
             if doc["id"] == doc_id:
                 doc["weight"] = weight
                 return True
         return False
+
+    def add_document(self, doc_id: int, question: str, answer: str, weight: float = 1.0,
+                     source: str = "", tags: str = "", severity: str = "中"):
+        """增量添加单条文档到标签匹配层"""
+        tag_list = [t.strip() for t in str(tags).replace("，", ",").split(",") if t.strip()]
+        self.documents.append({
+            "id": doc_id, "question": question, "answer": answer,
+            "weight": weight, "tags": tag_list, "source": source,
+            "severity": severity,
+        })
+        self._ready = True
 
     @property
     def ready(self) -> bool:

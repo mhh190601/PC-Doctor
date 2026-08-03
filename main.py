@@ -24,10 +24,11 @@ import math
 import random
 import urllib.request
 import urllib.error
+import logging
 import learning  # 导入自学习模块
+
+logger = logging.getLogger('pc_doctor')
 from PIL import Image, ImageTk
-import random
-import string
 import stat
 
 # PyInstaller 打包兼容：确保临时解压目录在路径中
@@ -188,9 +189,6 @@ def check_dns():
         return "DNS 解析正常，网络连接良好。"
     except socket.gaierror:
         return "DNS 解析异常！可尝试将 DNS 修改为 114.114.114.114 或 223.5.5.5。"
-
-import string
-from ctypes import windll
 
 @eel.expose
 def get_drives():
@@ -650,11 +648,20 @@ def full_system_scan():
     try:
         boot_info = get_boot_info()
         last_boot_time = boot_info.get('last_boot_time', '')
-        if '分钟' in last_boot_time and int(last_boot_time.split('分钟')[0]) > 60:
-            score -= 10
-            status = 'warning'
-            desc = f'上次开机耗时 {last_boot_time}，较慢。'
-            issues.append({"name": "开机速度较慢", "level": "warning", "desc": desc})
+        if '分钟' in last_boot_time:
+            try:
+                boot_mins = int(last_boot_time.split('分钟')[0])
+                if boot_mins > 60:
+                    score -= 10
+                    status = 'warning'
+                    desc = f'上次开机耗时 {last_boot_time}，较慢。'
+                    issues.append({"name": "开机速度较慢", "level": "warning", "desc": desc})
+                else:
+                    status = 'ok'
+                    desc = f'上次开机耗时 {last_boot_time}。'
+            except (ValueError, IndexError):
+                status = 'ok'
+                desc = f'上次开机耗时 {last_boot_time}。'
         else:
             status = 'ok'
             desc = f'上次开机耗时 {last_boot_time}。'
