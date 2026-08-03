@@ -1474,6 +1474,16 @@
             transition: width 0.4s ease;
             box-shadow: 0 0 10px rgba(5,80,174,0.5);
         }
+        /* 不确定进度条：循环滚动动画 */
+        .progress-fill.indeterminate {
+            width: 30%;
+            animation: progressSlide 1.5s ease-in-out infinite;
+        }
+        @keyframes progressSlide {
+            0%   { margin-left: 0%; }
+            50%  { margin-left: 70%; }
+            100% { margin-left: 0%; }
+        }
         .progress-text {
             font-size: 13px;
             color: var(--text-secondary);
@@ -1977,40 +1987,39 @@
             console.error('[handleCDiskSaver] 网络检测异常:', e);
         }
 
-        // 开始下载
+        // 开始下载：显示不确定进度条（循环动画，不模拟虚假进度）
         cdiskStatus = 'downloading';
         updateCDiskUI();
         var pc = document.getElementById('cdiskProgressContainer');
+        var progressFill = document.getElementById('cdiskProgressFill');
+        var progressLabel = document.getElementById('cdiskProgressLabel');
         var pm = document.getElementById('cdiskStatusMsg');
         if (pc) pc.style.display = 'block';
         if (pm) pm.textContent = '';
-
-        // 模拟进度条
-        let progress = 0;
-        const progressFill = document.getElementById('cdiskProgressFill');
-        const progressLabel = document.getElementById('cdiskProgressLabel');
-        const interval = setInterval(() => {
-            if (progress < 90) {
-                progress += Math.random() * 10;
-                if (progress > 90) progress = 90;
-                progressFill.style.width = progress + '%';
-                progressLabel.textContent = `正在下载 ${Math.round(progress)}%`;
-            }
-        }, 300);
+        if (progressFill) {
+            progressFill.style.width = '';
+            progressFill.classList.add('indeterminate');
+        }
+        if (progressLabel) progressLabel.textContent = '正在释放文件，请稍候…';
 
         // 调用后端安装
         const result = await eel.install_cdisksaver()();
-        clearInterval(interval);
+
+        // 停止不确定动画
+        if (progressFill) progressFill.classList.remove('indeterminate');
 
         if (result.success) {
-            progressFill.style.width = '100%';
-            progressLabel.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>安装完成！';
-            setTimeout(() => {
-                cdiskStatus = 'installed';
-                updateCDiskUI();
-            }, 600);
+            if (progressFill) progressFill.style.width = '100%';
+            if (progressLabel) progressLabel.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>安装完成！';
+            cdiskStatus = 'installed';
+            updateCDiskUI();
         } else {
-            document.getElementById('cdiskStatusMsg').textContent = (result.message || '下载失败');
+            if (progressFill) progressFill.style.width = '0%';
+            if (progressLabel) progressLabel.textContent = '';
+            // 显示错误 + 手动下载链接
+            var ghUrl = 'https://github.com/mhh190601/PC-Doctor/releases/latest';
+            if (pm) pm.innerHTML = escapeHtml(result.message || '安装失败')
+                + ' <a href="' + ghUrl + '" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
             cdiskStatus = 'none';
             updateCDiskUI();
         }

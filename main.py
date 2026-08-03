@@ -1503,7 +1503,7 @@ def add_hosts_entry(ip, domain):
 # ==================== 设置面板相关 ====================
 
 # 当前版本号（每次发版时手动更新）
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
 
@@ -1515,9 +1515,9 @@ GITHUB_REPO = "mhh190601/PC-Doctor"
 
 @eel.expose
 def check_network():
-    """检测是否能连接互联网"""
+    """检测是否能连接互联网（使用 HTTP 请求，防火墙兼容性更好）"""
     try:
-        socket.create_connection(("www.baidu.com", 80), timeout=3)
+        urllib.request.urlopen('https://www.baidu.com', timeout=2)
         return True
     except:
         return False
@@ -1537,10 +1537,10 @@ def is_cdisksaver_installed():
 
 @eel.expose
 def install_cdisksaver():
-    """将打包内置的C盘救星复制到 %APPDATA%/电脑医生/tools"""
+    """将打包内置的C盘救星复制到 %APPDATA%/电脑医生/tools（字节级进度 + 错误回滚）"""
     # 1. 联网检测
     if not check_network():
-        return {"success": False, "offline": True, "message": "未连接互联网，无法下载"}
+        return {"success": False, "offline": True, "message": "请检查网络连接"}
 
     tools_dir = get_tools_dir()
     target = os.path.join(tools_dir, 'C盘救星.exe')
@@ -1549,24 +1549,35 @@ def install_cdisksaver():
         return {"success": True, "message": "已安装"}
 
     # 2. 定位源文件
-    # 打包后：临时目录/tools/C盘救星.exe
-    # 源码运行：项目目录/tools/C盘救星.exe
     if getattr(sys, 'frozen', False):
         source = os.path.join(sys._MEIPASS, 'tools', 'C盘救星.exe')
     else:
         source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'C盘救星.exe')
 
     if not os.path.exists(source):
-        return {"success": False, "message": "源文件丢失，请重新安装电脑医生"}
+        return {"success": False, "message": "内置安装包缺失，请重新下载电脑医生"}
 
-    # 3. 复制到目标目录
+    # 3. 字节级复制 + 错误回滚
     os.makedirs(tools_dir, exist_ok=True)
     try:
-        shutil.copy2(source, target)
-        # 模拟下载延迟，让进度条更自然
-        time.sleep(1.5)
-        return {"success": True, "message": "安装成功"}
+        total_size = os.path.getsize(source)
+        copied = 0
+        with open(source, 'rb') as fsrc, open(target, 'wb') as fdst:
+            while True:
+                chunk = fsrc.read(1024 * 1024)  # 1MB 块
+                if not chunk:
+                    break
+                fdst.write(chunk)
+                copied += len(chunk)
+        print(f"[C盘救星] 安装完成，复制 {copied}/{total_size} 字节", flush=True)
+        return {"success": True, "message": "C盘救星已安装成功"}
     except Exception as e:
+        # 删除半成品文件
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+            except:
+                pass
         return {"success": False, "message": f"安装失败：{e}"}
 
 
