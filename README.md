@@ -50,7 +50,7 @@
 
 ### 方式一：下载安装包（推荐）
 
-👉 **[点击下载最新版安装包](https://github.com/mhh190601/PC-Doctor/releases/latest)**
+👉 **[点击下载最新版安装包](https://github.com/mhh190601/PC-Doctor/releases/download/v1.5.1/电脑医生安装包_v1.5.1.exe)**
 
 下载后双击运行，按向导安装即可。  
 支持 Windows 7 及以上系统。
