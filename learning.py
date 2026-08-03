@@ -264,7 +264,7 @@ def search_web(question, num_results=3):
     query = f'{question} 解决方法'
     search_url = f'https://www.bing.com/search?q={requests_lib.utils.quote(query)}'
     
-    print(f'[搜索调试] 扩展搜索: {query}')
+    logger.debug(f'[搜索] 扩展搜索: {query}')
 
     try:
         resp = requests_lib.get(search_url, headers=headers, timeout=10)
@@ -273,7 +273,7 @@ def search_web(question, num_results=3):
 
         items = soup.select('li.b_algo')
         if not items:
-            print('[搜索调试] 未找到Bing结果')
+            logger.debug('[搜索] 未找到Bing结果')
             return None
 
         # 可信站点列表（只要链接里包含这些关键字，就认为是好内容）
@@ -333,15 +333,15 @@ def search_web(question, num_results=3):
                 parts.append(f"   🔗 {r['link']}\n")
             return "\n".join(parts)
         else:
-            print('[搜索调试] 白名单过滤后无结果，尝试打印前3条原始链接...')
+            logger.debug('[搜索] 白名单过滤后无结果')
             for i, item in enumerate(items[:3]):
                 a = item.select_one('h2 a')
                 if a:
-                    print(f'  原始结果: {a.get_text(strip=True)} -> {a.get("href")}')
+                    logger.debug(f'  [{i}] {a.get_text(strip=True)} -> {a.get("href")}')
             return None
 
     except Exception as e:
-        print(f'[搜索调试] 出错: {str(e)}')
+        logger.warning(f'[搜索] 出错: {e}')
         return None
 
 def search_and_learn(question):

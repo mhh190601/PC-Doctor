@@ -4,6 +4,9 @@
 
 import sys
 import os
+import warnings
+# 抑制第三方库(eel/pyparsing) API 废弃警告 — VS2026 输出窗口会捕获 stderr
+warnings.filterwarnings('ignore', module='pyparsing')
 import json
 import eel
 import subprocess
@@ -22,9 +25,12 @@ import webbrowser
 import time
 import math
 import random
+import string
 import urllib.request
 import urllib.error
 import logging
+import ctypes
+from ctypes import windll, wintypes
 import learning  # 导入自学习模块
 
 logger = logging.getLogger('pc_doctor')
@@ -44,8 +50,17 @@ learning.refresh_cache()
 # 使用绝对路径，避免工作目录问题
 eel.init(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web'))
 
+def _get_data_dir():
+    """获取数据文件持久化目录（exe 取可执行文件所在目录，源码取脚本目录）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+KB_PATH = os.path.join(_get_data_dir(), 'knowledge_base.json')
+KB_V2_PATH = os.path.join(_get_data_dir(), 'knowledge_base_v2.json')
+
 # ================== 原有优化功能 (保持不变) ==================
-THEME_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme_pref.txt')
+THEME_FILE = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'PC-Doctor', 'theme_pref.txt')
 
 @eel.expose
 def get_theme():
@@ -58,6 +73,7 @@ def get_theme():
 @eel.expose
 def set_theme(theme):
     """保存主题偏好"""
+    os.makedirs(os.path.dirname(THEME_FILE), exist_ok=True)
     with open(THEME_FILE, 'w') as f:
         f.write(theme)
 
@@ -120,6 +136,7 @@ def check_startup_items():
     ]
     for key_path in keys:
         for hive, label in [(winreg.HKEY_CURRENT_USER, "HKCU"), (winreg.HKEY_LOCAL_MACHINE, "HKLM")]:
+            key = None
             try:
                 key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_READ)
                 i = 0
@@ -130,9 +147,11 @@ def check_startup_items():
                         i += 1
                     except OSError:
                         break
-                winreg.CloseKey(key)
             except Exception:
                 pass
+            finally:
+                if key is not None:
+                    winreg.CloseKey(key)
     if not startup_list:
         return "没有发现额外的开机启动项。"
     else:
@@ -216,15 +235,13 @@ def get_system_status():
     except Exception as e:
         return {'error': str(e)}
 
-import ctypes
-from ctypes import wintypes
 
 @eel.expose
 def is_admin():
     """检测当前是否以管理员权限运行"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except:
+    except Exception:
         return False
 
 def _find_nvidia_smi():
@@ -244,7 +261,7 @@ def _find_nvidia_smi():
             for root, dirs, files in os.walk(driver_store):
                 if 'nvidia-smi.exe' in files:
                     return os.path.join(root, 'nvidia-smi.exe')
-    except:
+    except Exception:
         pass
     return None
 
@@ -267,7 +284,7 @@ def get_cpu_temperature():
                 if 200 < kelvin < 400:  # 合理范围: -73°C ~ 127°C
                     temp_celsius = kelvin - 273.15
                     return round(temp_celsius, 1)
-    except:
+    except Exception:
         pass
     
     try:
@@ -283,7 +300,7 @@ def get_cpu_temperature():
                 temp_celsius = (int(kelvin_tenths) / 10.0) - 273.15
                 if -20 < temp_celsius < 150:
                     return round(temp_celsius, 1)
-    except:
+    except Exception:
         pass
     return None
 
@@ -305,7 +322,7 @@ def get_gpu_temperature():
         temp_str = result.stdout.strip()
         if temp_str:
             return round(float(temp_str), 1)
-    except:
+    except Exception:
         pass
     return None
 
@@ -350,7 +367,7 @@ def optimize_memory():
                     try:
                         if EmptyWorkingSet(handle):
                             released_count += 1
-                    except:
+                    except Exception:
                         pass
                     finally:
                         CloseHandle(handle)
@@ -373,9 +390,10 @@ def create_system_restore_point(description="电脑医生自动还原点"):
             ['powershell', '-Command', 'Enable-ComputerRestore -Drive "C:\\"'],
             capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW
         )
-        # 创建还原点
+        # 创建还原点（对 description 做安全转义，防止命令注入）
+        safe_desc = description.replace('"', '""')
         result = subprocess.run(
-            ['powershell', '-Command', f'Checkpoint-Computer -Description "{description}" -RestorePointType "MODIFY_SETTINGS"'],
+            ['powershell', '-Command', f'Checkpoint-Computer -Description "{safe_desc}" -RestorePointType "MODIFY_SETTINGS"'],
             capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW
         )
         if result.returncode == 0:
@@ -511,7 +529,7 @@ def get_folder_size(folder_path):
                     total += os.path.getsize(fp)
                 except (OSError, PermissionError):
                     pass
-    except:
+    except Exception:
         pass
     return total / (1024 * 1024)  # 返回 MB
 
@@ -539,7 +557,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "磁盘空间检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 2. 临时文件 ----------
@@ -563,7 +581,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "垃圾文件检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 3. 启动项 ----------
@@ -583,7 +601,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "开机启动项检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 4. 流氓软件 ----------
@@ -602,7 +620,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "流氓软件检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 5. DNS ----------
@@ -621,7 +639,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "DNS 检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 6. 内存使用率 ----------
@@ -641,7 +659,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "内存使用率检查", "status": "warning", "desc": "检测失败"})
     
     # ---------- 7. 开机耗时 ----------
@@ -670,7 +688,7 @@ def full_system_scan():
             "status": status,
             "desc": desc
         })
-    except:
+    except Exception:
         checks.append({"name": "开机耗时检查", "status": "warning", "desc": "检测失败"})
     
     score = max(0, min(100, score))
@@ -745,7 +763,7 @@ def clean_privacy_items(selected_ids):
                     fp = os.path.join(dirpath, f)
                     try:
                         size += os.path.getsize(fp)
-                    except:
+                    except Exception:
                         pass
         return size
 
@@ -766,14 +784,14 @@ def clean_privacy_items(selected_ids):
                                 os.remove(fp)
                             else:
                                 shutil.rmtree(fp, ignore_errors=True)
-                        except:
+                        except Exception:
                             pass
                     size_after = get_dir_size(cache_path)
                     freed = size_before - size_after
                     total_files += 1
                     total_size += freed
                     details.append(f"清理 {name} 缓存，释放约 {freed / (1024*1024):.1f} MB")
-                except:
+                except Exception:
                     details.append(f"清理 {name} 缓存时失败")
 
     # 最近文档记录
@@ -785,7 +803,7 @@ def clean_privacy_items(selected_ids):
                 try:
                     os.remove(os.path.join(recent, f))
                     count += 1
-                except:
+                except Exception:
                     pass
             total_files += count
             details.append(f"清理最近文档记录 {count} 条")
@@ -803,15 +821,18 @@ def clean_privacy_items(selected_ids):
             winreg.CloseKey(key)
             details.append("清理运行历史记录完成")
             total_files += 1
-        except:
+        except Exception:
             details.append("清理运行历史记录失败")
 
     # 清空回收站
     if 'recycle_bin' in selected_ids:
         try:
-            os.system('cmd /c "echo y| rd /s %systemdrive%\\$Recycle.Bin"')
+            subprocess.run(
+                ['cmd', '/c', 'rd', '/s', '/q', os.path.expandvars(r'%systemdrive%\$Recycle.Bin')],
+                capture_output=True, timeout=30, creationflags=CREATE_NO_WINDOW
+            )
             details.append("回收站已清空")
-        except:
+        except Exception:
             details.append("清空回收站失败")
 
     # 微信/QQ 缓存
@@ -863,7 +884,7 @@ def clean_privacy_items(selected_ids):
                             os.remove(fp)
                             total_files += 1
                             total_size += s
-                        except:
+                        except Exception:
                             pass
                 details.append(f"清理临时文件夹 {tmp}")
 
@@ -888,7 +909,7 @@ def diagnose_network():
             status = "warning"
         else:
             report.append("✅ 网卡状态正常。")
-    except:
+    except Exception:
         report.append("❌ 无法获取网卡状态。")
         status = "error"
 
@@ -904,7 +925,7 @@ def diagnose_network():
         else:
             report.append("❌ 无法Ping通百度，请检查网络连接。")
             status = "error"
-    except:
+    except Exception:
         report.append("❌ Ping测试失败。")
         status = "error"
 
@@ -912,7 +933,7 @@ def diagnose_network():
     try:
         socket.gethostbyname('www.baidu.com')
         report.append("✅ DNS解析正常。")
-    except:
+    except Exception:
         report.append("❌ DNS解析失败，可能DNS设置有问题。")
         status = "error"
 
@@ -926,7 +947,7 @@ def diagnose_network():
         else:
             report.append("✅ 系统代理未开启。")
         winreg.CloseKey(key)
-    except:
+    except Exception:
         report.append("⚠️ 无法检查代理设置。")
 
     return {"status": status, "report": "\n".join(report)}
@@ -939,25 +960,25 @@ def fix_network():
         subprocess.run(['ipconfig', '/release'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         subprocess.run(['ipconfig', '/renew'], capture_output=True, timeout=30, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已释放并更新IP地址。")
-    except:
+    except Exception:
         fixes.append("❌ IP更新失败，请手动操作。")
 
     try:
         subprocess.run(['ipconfig', '/flushdns'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已刷新DNS缓存。")
-    except:
+    except Exception:
         fixes.append("❌ DNS刷新失败。")
 
     try:
         subprocess.run(['netsh', 'winsock', 'reset'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已重置Winsock目录。")
-    except:
+    except Exception:
         fixes.append("❌ Winsock重置失败。")
 
     try:
         subprocess.run(['netsh', 'int', 'ip', 'reset'], capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
         fixes.append("✅ 已重置TCP/IP协议栈。")
-    except:
+    except Exception:
         fixes.append("❌ TCP/IP重置失败。")
 
     try:
@@ -965,7 +986,7 @@ def fix_network():
         winreg.SetValueEx(key, 'ProxyEnable', 0, winreg.REG_DWORD, 0)
         winreg.CloseKey(key)
         fixes.append("✅ 已关闭系统代理。")
-    except:
+    except Exception:
         fixes.append("⚠️ 无法自动关闭代理，请手动检查。")
 
     fixes.append("🔔 部分修复需要重启电脑才能生效。")
@@ -1010,38 +1031,54 @@ def network_speed_test():
 
 # ================== 右键菜单管理 ==================
 
-def _copy_key(src_hive, src_path, dst_hive, dst_path):
+def _copy_key(src_hive, src_path, dst_hive, dst_path, _depth=0):
     """递归复制注册表键和值"""
+    MAX_DEPTH = 20
+    MAX_ENUM = 5000
+    if _depth > MAX_DEPTH:
+        return
     src_key = winreg.OpenKey(src_hive, src_path, 0, winreg.KEY_READ)
     dst_key = winreg.CreateKey(dst_hive, dst_path)
     i = 0
-    while True:
+    while i < MAX_ENUM:
         try:
             name, data, type_ = winreg.EnumValue(src_key, i)
             winreg.SetValueEx(dst_key, name, 0, type_, data)
             i += 1
         except OSError:
             break
+        except Exception:
+            i += 1  # 跳过异常值继续
     j = 0
-    while True:
+    while j < MAX_ENUM:
         try:
             sub_name = winreg.EnumKey(src_key, j)
-            _copy_key(src_hive, f"{src_path}\\{sub_name}", dst_hive, f"{dst_path}\\{sub_name}")
+            _copy_key(src_hive, f"{src_path}\\{sub_name}", dst_hive, f"{dst_path}\\{sub_name}", _depth + 1)
             j += 1
         except OSError:
             break
+        except Exception:
+            j += 1
     winreg.CloseKey(src_key)
     winreg.CloseKey(dst_key)
 
-def _delete_key(hive, path):
+def _delete_key(hive, path, _depth=0):
     """递归删除注册表键"""
+    MAX_DEPTH = 20
+    MAX_ENUM = 5000
+    if _depth > MAX_DEPTH:
+        return
     key = winreg.OpenKey(hive, path, 0, winreg.KEY_ALL_ACCESS)
-    while True:
+    count = 0
+    while count < MAX_ENUM:
         try:
             sub = winreg.EnumKey(key, 0)
-            _delete_key(hive, f"{path}\\{sub}")
+            _delete_key(hive, f"{path}\\{sub}", _depth + 1)
+            count += 1
         except OSError:
             break
+        except Exception:
+            count += 1
     winreg.CloseKey(key)
     winreg.DeleteKey(hive, path)
 
@@ -1072,7 +1109,7 @@ def get_context_menu_items():
                         if not display_name:
                             display_name = sub_name
                         winreg.CloseKey(sub)
-                    except:
+                    except Exception:
                         display_name = sub_name
 
                     command = ""
@@ -1080,7 +1117,7 @@ def get_context_menu_items():
                         cmd_key = winreg.OpenKey(hive, full_path + r"\command", 0, winreg.KEY_READ)
                         command, _ = winreg.QueryValueEx(cmd_key, "")
                         winreg.CloseKey(cmd_key)
-                    except:
+                    except Exception:
                         pass
 
                     is_system = False
@@ -1120,7 +1157,7 @@ def disable_context_menu_item(path):
             backup_key = winreg.CreateKey(backup_hive, backup_path)
             _copy_key(hive, path, backup_hive, backup_path)
             winreg.CloseKey(backup_key)
-        except:
+        except Exception:
             pass
         _delete_key(hive, path)
         return {"success": True, "message": f"已禁用 {os.path.basename(path)}"}
@@ -1187,7 +1224,7 @@ def get_startup_items_full():
                 except OSError:
                     break
             winreg.CloseKey(key)
-        except:
+        except Exception:
             pass
 
     # 扫描启动文件夹
@@ -1219,15 +1256,15 @@ def get_startup_items_full():
                 sub_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BACKUP_REG_PATH}\\{subkey_name}", 0, winreg.KEY_READ)
                 try:
                     orig_location, _ = winreg.QueryValueEx(sub_key, "Location")
-                except:
+                except Exception:
                     orig_location = ""
                 try:
                     orig_name, _ = winreg.QueryValueEx(sub_key, "ValueName")
-                except:
+                except Exception:
                     orig_name = subkey_name
                 try:
                     orig_command, _ = winreg.QueryValueEx(sub_key, "Command")
-                except:
+                except Exception:
                     orig_command = ""
                 items.append({
                     "name": orig_name,
@@ -1242,7 +1279,7 @@ def get_startup_items_full():
             except OSError:
                 break
         winreg.CloseKey(backup_key)
-    except:
+    except Exception:
         pass
 
     # 备份文件夹中的禁用项
@@ -1273,7 +1310,7 @@ def get_startup_items_full():
         if os.path.exists(exe_path):
             try:
                 size_mb = round(os.path.getsize(exe_path) / (1024 * 1024), 2)
-            except:
+            except Exception:
                 pass
         item['size_mb'] = size_mb
         if size_mb > 200:
@@ -1353,7 +1390,7 @@ def locate_file(file_path):
             if os.path.exists(parent):
                 subprocess.Popen(['explorer', parent], creationflags=CREATE_NO_WINDOW)
         return True
-    except:
+    except Exception:
         return False
 
 @eel.expose
@@ -1373,8 +1410,11 @@ def _read_hosts_raw():
     """读取原始 Hosts 文件内容（列表形式）"""
     if not os.path.exists(HOSTS_PATH):
         return []
-    with open(HOSTS_PATH, "r", encoding="utf-8") as f:
-        return f.readlines()
+    try:
+        with open(HOSTS_PATH, "r", encoding="utf-8") as f:
+            return f.readlines()
+    except (PermissionError, OSError) as e:
+        raise PermissionError(f"无法读取 Hosts 文件（需要管理员权限）：{e}")
 
 def _write_hosts_raw(lines):
     """写入 Hosts 文件"""
@@ -1513,11 +1553,19 @@ def add_hosts_entry(ip, domain):
 APP_VERSION = "1.5.1"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
+# C盘救星下载配置
+CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/cdisk-v1.0.0/C._v2.0.exe"
+CDISK_SAVER_FILENAME = "C._v2.0.exe"
 
+# 下载进度（跨线程共享，前端轮询读取）
+import threading
+_download_lock = threading.Lock()
+_download_progress = 0
+_download_total = 0
 
 
 # ============================================================
-# 子程序管理（C盘救星 内置安装版）
+# 子程序管理（C盘救星 直链下载版）
 # ============================================================
 
 @eel.expose
@@ -1526,7 +1574,7 @@ def check_network():
     try:
         urllib.request.urlopen('https://www.baidu.com', timeout=2)
         return True
-    except:
+    except Exception:
         return False
 
 
@@ -1537,61 +1585,86 @@ def get_tools_dir():
 
 @eel.expose
 def is_cdisksaver_installed():
-    """检查目标路径是否存在C盘救星.exe"""
-    target = os.path.join(get_tools_dir(), 'C盘救星.exe')
+    """检查目标路径是否存在C盘救星"""
+    target = os.path.join(get_tools_dir(), CDISK_SAVER_FILENAME)
     return os.path.exists(target)
 
 
 @eel.expose
 def install_cdisksaver():
-    """将打包内置的C盘救星复制到 %APPDATA%/电脑医生/tools（字节级进度 + 错误回滚）"""
-    # 1. 联网检测
+    """从 GitHub Release 直链下载 C 盘救星，支持实时进度回调"""
+    global _download_progress, _download_total
+
+    # 1. 网络检测
     if not check_network():
-        return {"success": False, "offline": True, "message": "请检查网络连接"}
+        return {"success": False, "offline": True, "message": "未连接互联网，无法下载"}
 
     tools_dir = get_tools_dir()
-    target = os.path.join(tools_dir, 'C盘救星.exe')
+    target = os.path.join(tools_dir, CDISK_SAVER_FILENAME)
 
     if os.path.exists(target):
-        return {"success": True, "message": "已安装"}
+        return {"success": True, "message": "已安装，可直接打开"}
 
-    # 2. 定位源文件
-    if getattr(sys, 'frozen', False):
-        source = os.path.join(sys._MEIPASS, 'tools', 'C盘救星.exe')
-    else:
-        source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools', 'C盘救星.exe')
-
-    if not os.path.exists(source):
-        return {"success": False, "message": "内置安装包缺失，请重新下载电脑医生"}
-
-    # 3. 字节级复制 + 错误回滚
     os.makedirs(tools_dir, exist_ok=True)
+
+    # 重置进度
+    with _download_lock:
+        _download_progress = 0
+        _download_total = 0
+
     try:
-        total_size = os.path.getsize(source)
-        copied = 0
-        with open(source, 'rb') as fsrc, open(target, 'wb') as fdst:
-            while True:
-                chunk = fsrc.read(1024 * 1024)  # 1MB 块
-                if not chunk:
-                    break
-                fdst.write(chunk)
-                copied += len(chunk)
-        print(f"[C盘救星] 安装完成，复制 {copied}/{total_size} 字节", flush=True)
-        return {"success": True, "message": "C盘救星已安装成功"}
+        # 2. 流式下载（支持进度跟踪）
+        response = requests.get(CDISK_SAVER_URL, stream=True, timeout=30)
+        response.raise_for_status()
+        with _download_lock:
+            _download_total = int(response.headers.get('content-length', 0))
+            _download_progress = 0
+
+        # 写入临时文件，完成后原子替换
+        temp_file = target + '.tmp'
+        with open(temp_file, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    with _download_lock:
+                        _download_progress += len(chunk)
+        os.replace(temp_file, target)
+        with _download_lock:
+            downloaded = _download_progress
+            total = _download_total
+        print(f"[C盘救星] 下载完成：{downloaded}/{total} 字节", flush=True)
+        return {"success": True, "message": "下载完成，C盘救星已安装"}
+    except requests.exceptions.ConnectionError:
+        return {"success": False, "message": "网络连接失败，请检查网络"}
+    except requests.exceptions.Timeout:
+        return {"success": False, "message": "下载超时，请稍后重试"}
     except Exception as e:
-        # 删除半成品文件
-        if os.path.exists(target):
-            try:
-                os.remove(target)
-            except:
-                pass
-        return {"success": False, "message": f"安装失败：{e}"}
+        # 清理残留文件
+        for f in [target, target + '.tmp']:
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass
+        return {"success": False, "message": f"下载失败：{str(e)[:100]}"}
+
+
+@eel.expose
+def get_download_progress():
+    """返回当前下载进度（前端轮询调用）"""
+    with _download_lock:
+        downloaded = _download_progress
+        total = _download_total
+    if total > 0:
+        percent = round((downloaded / total) * 100, 1)
+        return {"percent": percent, "downloaded": downloaded, "total": total}
+    return {"percent": 0, "downloaded": 0, "total": 0}
 
 
 @eel.expose
 def launch_cdisksaver():
     """启动C盘救星"""
-    target = os.path.join(get_tools_dir(), 'C盘救星.exe')
+    target = os.path.join(get_tools_dir(), CDISK_SAVER_FILENAME)
     print(f"[C盘救星] 目标: {target}", flush=True)
     print(f"[C盘救星] 存在: {os.path.exists(target)}", flush=True)
     print(f"[C盘救星] 大小: {os.path.getsize(target) if os.path.exists(target) else 'N/A'}", flush=True)
@@ -1662,7 +1735,7 @@ def check_for_update():
                             "current_version": APP_VERSION,
                             "download_url": download_url
                         }
-                except:
+                except Exception:
                     if latest_version != APP_VERSION:
                         return {
                             "has_update": True,
@@ -1724,9 +1797,9 @@ def set_autostart(enabled):
 def export_knowledge_base():
     """导出知识库为 JSON 字符串"""
     try:
-        with open('knowledge_base.json', 'r', encoding='utf-8') as f:
+        with open(KB_PATH, 'r', encoding='utf-8') as f:
             return f.read()
-    except:
+    except Exception:
         return "[]"
 
 @eel.expose
@@ -1738,8 +1811,8 @@ def import_knowledge_base(json_str):
             return {"success": False, "message": "格式错误，需要 JSON 数组"}
         
         existing = []
-        if os.path.exists('knowledge_base.json'):
-            with open('knowledge_base.json', 'r', encoding='utf-8') as f:
+        if os.path.exists(KB_PATH):
+            with open(KB_PATH, 'r', encoding='utf-8') as f:
                 existing = json.load(f)
         
         existing_questions = {item['question'] for item in existing}
@@ -1751,7 +1824,7 @@ def import_knowledge_base(json_str):
                     existing_questions.add(item['question'])
                     added += 1
         
-        with open('knowledge_base.json', 'w', encoding='utf-8') as f:
+        with open(KB_PATH, 'w', encoding='utf-8') as f:
             json.dump(existing, f, ensure_ascii=False, indent=4)
         
         learning.refresh_cache()
@@ -1825,7 +1898,7 @@ def get_c_disk_info():
             'free_gb': round(usage.free / (1024**3), 1),
             'percent': usage.percent
         }
-    except:
+    except Exception:
         return None
 
 
@@ -1884,7 +1957,7 @@ def get_top_folders(drive="C:\\"):
                 'name': entry.name,
                 'size_mb': round(size / (1024 * 1024), 1)
             })
-    except:
+    except Exception:
         pass
     results.sort(key=lambda x: x['size_mb'], reverse=True)
     return results[:10]
@@ -1903,7 +1976,7 @@ def get_boot_info():
         hours, remainder = divmod(uptime_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         info['uptime'] = f"{int(hours)}小时{int(minutes)}分钟{int(seconds)}秒"
-    except:
+    except Exception:
         info['uptime'] = "无法获取"
     
     # 2. 上次开机耗时（通过事件日志ID 100计算）
@@ -1930,14 +2003,13 @@ def get_boot_info():
         else:
             info['last_boot_time'] = "数据不足，请重启后再试"
             info['last_boot_seconds'] = 0
-    except:
+    except Exception:
         info['last_boot_time'] = "无法获取（可能需要管理员权限）"
         info['last_boot_seconds'] = 0
     
     return info
 
 # ================== 文件夹空间树形分析 ==================
-import stat
 
 @eel.expose
 def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
@@ -2019,7 +2091,7 @@ def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
                     if entry.is_dir(follow_symlinks=False):
                         sz = get_size(entry.path)
                         print(f"  {entry.name}: {round(sz/(1024*1024), 1)} MB ({round(sz/(1024*1024*1024), 2)} GB)")
-                except:
+                except Exception:
                     pass
     except Exception as e:
         print(f"扫描顶层出错: {e}")
@@ -2058,14 +2130,14 @@ def get_system_info():
             info['cpu'] = lines[1]  # 通常第二行是CPU名称
         else:
             info['cpu'] = raw_cpu if raw_cpu else "无法识别"
-    except:
+    except Exception:
         info['cpu'] = platform.processor() or "无法识别"
 
     # 内存
     try:
         mem = psutil.virtual_memory()
         info['memory_total'] = round(mem.total / (1024**3), 1)
-    except:
+    except Exception:
         info['memory_total'] = 0
 
     # 显卡：优先取独显，排除虚拟设备
@@ -2087,7 +2159,7 @@ def get_system_info():
                 info['gpu'] = gpu_list[0]  # 只有集显就显示集显
         else:
             info['gpu'] = lines[1] if len(lines) > 1 else "未检测到"
-    except:
+    except Exception:
         info['gpu'] = "获取失败"
 
     # 主板型号
@@ -2098,7 +2170,7 @@ def get_system_info():
         )
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
         info['motherboard'] = lines[1] if len(lines) > 1 else "未知"
-    except:
+    except Exception:
         info['motherboard'] = "未知"
 
     # 磁盘信息
@@ -2115,17 +2187,17 @@ def get_system_info():
                 'used_gb': round(usage.used / (1024**3), 1),
                 'free_gb': round(usage.free / (1024**3), 1)
             })
-        except:
+        except Exception:
             pass
     info['disks'] = disks
     return info
 
 # ================== 启动项排行分析 ==================
-import winreg
 
 @eel.expose
 def get_startup_ranking():
     """获取启动项及其影响评级，按文件大小降序排列"""
+    import winreg
     startups = []
 
     # 1. 扫描注册表中的启动项
@@ -2179,7 +2251,7 @@ def get_startup_ranking():
         try:
             if os.path.isfile(exe_path):
                 size_mb = round(os.path.getsize(exe_path) / (1024 * 1024), 2)
-        except:
+        except Exception:
             pass
 
         # 影响程度评级
@@ -2203,13 +2275,11 @@ def get_startup_ranking():
     return results
 
 # ================== 软件卸载助手 ==================
-import winreg
-import subprocess
-import glob
 
 @eel.expose
 def get_installed_software():
     """获取已安装软件列表，返回名称、版本、大小、卸载命令等"""
+    import winreg
     software_list = []
     uninstall_keys = [
         r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -2230,29 +2300,29 @@ def get_installed_software():
                     size_mb = 0
                     try:
                         name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                    except:
+                    except Exception:
                         continue  # 跳过没有显示名称的项
                     try:
                         version = winreg.QueryValueEx(subkey, "DisplayVersion")[0]
-                    except:
+                    except Exception:
                         pass
                     try:
                         publisher = winreg.QueryValueEx(subkey, "Publisher")[0]
-                    except:
+                    except Exception:
                         pass
                     try:
                         uninstall_string = winreg.QueryValueEx(subkey, "UninstallString")[0]
-                    except:
+                    except Exception:
                         pass
                     try:
                         install_location = winreg.QueryValueEx(subkey, "InstallLocation")[0]
-                    except:
+                    except Exception:
                         pass
                     try:
                         # 尝试获取大小（有些软件有 EstimatedSize，单位 KB）
                         size = winreg.QueryValueEx(subkey, "EstimatedSize")[0]
                         size_mb = round(int(size) / 1024, 1) if size else 0
-                    except:
+                    except Exception:
                         pass
                     # 判断是否为有效的可卸载软件（有卸载命令）
                     is_valid = bool(uninstall_string)
@@ -2269,10 +2339,10 @@ def get_installed_software():
                         "reg_key": reg_full_path
                     })
                     winreg.CloseKey(subkey)
-                except:
+                except Exception:
                     pass
             winreg.CloseKey(key)
-        except:
+        except Exception:
             pass
     # 按名称排序
     software_list.sort(key=lambda x: x["name"].lower())
@@ -2310,7 +2380,7 @@ def scan_leftovers(software_name, install_location):
                     if software_name.lower() in item.lower():
                         full_path = os.path.join(base, item)
                         search_paths.append(full_path)
-            except:
+            except Exception:
                 pass
     # 收集残留文件列表（只展示顶层和二级文件，避免太多）
     for sp in set(search_paths):
@@ -2337,10 +2407,10 @@ def scan_leftovers(software_name, install_location):
                     subkey_name = winreg.EnumKey(key, i)
                     if software_name.lower() in subkey_name.lower():
                         leftovers["reg_keys"].append(f"HKEY_LOCAL_MACHINE\\{reg_path}\\{subkey_name}")
-                except:
+                except Exception:
                     pass
             winreg.CloseKey(key)
-        except:
+        except Exception:
             pass
     return leftovers
 
@@ -2459,7 +2529,7 @@ def find_duplicate_files(drive="C:\\", min_size_mb=1):
     for md5, paths in duplicates.items():
         try:
             size_mb = round(os.path.getsize(paths[0]) / (1024 * 1024), 2)
-        except:
+        except Exception:
             size_mb = 0
 
         # 计算这组重复文件浪费的空间（保留一份，其余的都是浪费）
@@ -2596,7 +2666,7 @@ def get_removable_drives():
                         "label": parts[1] or "未命名",
                         "size_gb": float(parts[2])
                     })
-    except:
+    except Exception:
         pass
     return drives
 
@@ -2695,7 +2765,7 @@ def show_splash(duration=2800):
         img = Image.open(logo_path)
         # 直接取第一帧（通常就是最大尺寸）
         base_logo = img.resize((logo_size, logo_size), Image.Resampling.LANCZOS).convert('RGBA')
-    except:
+    except Exception:
         pass
 
     # 粒子系统：围绕 Logo 区域环形分布
@@ -2817,32 +2887,13 @@ def show_splash(duration=2800):
 
 def force_exit(page=None, sockets=None):
     """强制退出整个 Python 进程（忽略 Eel 传来的参数）"""
+    try:
+        eel.sleep(0.01)  # 给 Eel 极短时间清理
+    except Exception:
+        pass
     os._exit(0)
 
-@eel.expose
-def check_c_disk_saver():
-    """检测C盘救星是否已安装"""
-    paths = [
-        os.path.join(os.path.dirname(sys.executable), 'C盘救星.exe'),
-        r'C:\Program Files\C盘救星\C盘救星.exe',
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return {"installed": True, "path": p}
-    return {"installed": False}
 
-
-@eel.expose
-def launch_c_disk_saver():
-    """启动C盘救星"""
-    paths = [
-        os.path.join(os.path.dirname(sys.executable), 'C盘救星.exe'),
-        r'C:\Program Files\C盘救星\C盘救星.exe',
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            subprocess.Popen(p, creationflags=CREATE_NO_WINDOW)
-            return
 
 
 
@@ -2868,10 +2919,10 @@ if __name__ == '__main__':
     
     # 3. 如果知识库为空且存在JSON文件，自动导入（优先 v2 新格式）
     if not learning.load_knowledge_data():
-        if os.path.exists('knowledge_base_v2.json'):
-            learning.import_from_json('knowledge_base_v2.json')
-        elif os.path.exists('knowledge_base.json'):
-            learning.import_from_json('knowledge_base.json')
+        if os.path.exists(KB_V2_PATH):
+            learning.import_from_json(KB_V2_PATH)
+        elif os.path.exists(KB_PATH):
+            learning.import_from_json(KB_PATH)
     
     # 4. 启动 Eel 主窗口
     import traceback

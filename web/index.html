@@ -1916,6 +1916,7 @@
 
     // ========== 软件中心 ==========
     let cdiskStatus = 'none'; // none, downloading, installed
+    let downloadInterval = null;
 
     // 进入软件中心时初始化
     async function initAppStore() {
@@ -1980,14 +1981,14 @@
         try {
             const online = await eel.check_network()();
             if (!online) {
-                document.getElementById('cdiskStatusMsg').textContent = '未连接互联网，无法下载';
+                document.getElementById('cdiskStatusMsg').textContent = '❌ 未连接互联网，无法下载';
                 return;
             }
         } catch(e) {
             console.error('[handleCDiskSaver] 网络检测异常:', e);
         }
 
-        // 开始下载：显示不确定进度条（循环动画，不模拟虚假进度）
+        // 开始下载
         cdiskStatus = 'downloading';
         updateCDiskUI();
         var pc = document.getElementById('cdiskProgressContainer');
@@ -1997,32 +1998,51 @@
         if (pc) pc.style.display = 'block';
         if (pm) pm.textContent = '';
         if (progressFill) {
-            progressFill.style.width = '';
-            progressFill.classList.add('indeterminate');
+            progressFill.style.width = '0%';
+            progressFill.classList.remove('indeterminate');
         }
-        if (progressLabel) progressLabel.textContent = '正在释放文件，请稍候…';
+        if (progressLabel) progressLabel.textContent = '正在下载 0%';
 
-        // 调用后端安装
-        const result = await eel.install_cdisksaver()();
+        // 启动后端下载（异步，不阻塞）
+        eel.install_cdisksaver()();
 
-        // 停止不确定动画
-        if (progressFill) progressFill.classList.remove('indeterminate');
+        // 轮询真实下载进度
+        downloadInterval = setInterval(async () => {
+            try {
+                const progress = await eel.get_download_progress()();
+                if (progressFill) progressFill.style.width = progress.percent + '%';
+                if (progressLabel) progressLabel.textContent = '正在下载 ' + progress.percent + '%';
 
-        if (result.success) {
-            if (progressFill) progressFill.style.width = '100%';
-            if (progressLabel) progressLabel.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>安装完成！';
-            cdiskStatus = 'installed';
-            updateCDiskUI();
-        } else {
-            if (progressFill) progressFill.style.width = '0%';
-            if (progressLabel) progressLabel.textContent = '';
-            // 显示错误 + 手动下载链接
-            var ghUrl = 'https://github.com/mhh190601/PC-Doctor/releases/latest';
-            if (pm) pm.innerHTML = escapeHtml(result.message || '安装失败')
-                + ' <a href="' + ghUrl + '" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
-            cdiskStatus = 'none';
-            updateCDiskUI();
-        }
+                // 下载完成（进度达 100% 后确认文件是否存在）
+                if (progress.percent >= 100) {
+                    clearInterval(downloadInterval);
+                    downloadInterval = null;
+                    const installed = await eel.is_cdisksaver_installed()();
+                    if (installed) {
+                        cdiskStatus = 'installed';
+                        updateCDiskUI();
+                        if (pm) pm.textContent = '✅ 下载完成，点击打开即可使用';
+                    } else {
+                        cdiskStatus = 'none';
+                        updateCDiskUI();
+                        if (pm) pm.innerHTML = escapeHtml('下载校验失败，请重试')
+                            + ' <a href="https://github.com/mhh190601/PC-Doctor/releases/latest" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
+                        if (progressFill) progressFill.style.width = '0%';
+                        if (progressLabel) progressLabel.textContent = '';
+                    }
+                }
+            } catch(e) {
+                // 检测到后端出错（install_cdisksaver 完成后 eel 调用可能返回错误）
+                clearInterval(downloadInterval);
+                downloadInterval = null;
+                cdiskStatus = 'none';
+                updateCDiskUI();
+                if (pm) pm.innerHTML = escapeHtml('下载异常，请重试')
+                    + ' <a href="https://github.com/mhh190601/PC-Doctor/releases/latest" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
+                if (progressFill) progressFill.style.width = '0%';
+                if (progressLabel) progressLabel.textContent = '';
+            }
+        }, 300);
     }
 
     async function openCDiskSaver() {
@@ -4227,6 +4247,14 @@
         var mo = new MutationObserver(function () { run(); });
         mo.observe(document.body, { childList: true, subtree: true });
     }
+
+    // 页面关闭时清理下载定时器，避免内存泄漏
+    window.addEventListener('beforeunload', function() {
+        if (downloadInterval) {
+            clearInterval(downloadInterval);
+            downloadInterval = null;
+        }
+    });
 })();
 </script>
 </body>

@@ -23,6 +23,7 @@ import time
 import logging
 import shutil
 import sqlite3
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -37,6 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger('ai_engine')
 
 # 查询统计计数器
+_stats_lock = threading.Lock()
 _query_stats = {
     "total": 0,
     "exact_hits": 0,
@@ -50,6 +52,9 @@ _query_stats = {
 
 # 语义检索可用性标记（模块级，供测试使用）
 _semantic_available = None
+
+# 模块级锁（引擎单例 + 查询统计保护）
+_MODULE_LOCK = threading.Lock()
 
 # ============================================================
 # 0. 配置系统
@@ -920,8 +925,8 @@ class KnowledgeBridge:
                     })
                 conn.close()
                 return docs
-            except Exception:
-                logger.error(f"读取知识库失败: {e}")
+            except Exception as e2:
+                logger.error(f"读取知识库兼容模式失败: {e2}")
                 return []
 
     @staticmethod
@@ -1608,10 +1613,13 @@ _engine: Optional[AIEngine] = None
 
 
 def get_engine() -> AIEngine:
-    """获取全局引擎实例（懒加载）"""
+    """获取全局引擎实例（懒加载，线程安全）"""
     global _engine
     if _engine is None:
-        _engine = AIEngine()
+        # 双检锁确保只创建一次
+        with _MODULE_LOCK:
+            if _engine is None:
+                _engine = AIEngine()
     return _engine
 
 
@@ -1671,8 +1679,9 @@ def reload_knowledge() -> bool:
 
 def get_query_stats() -> dict:
     """获取查询统计（监控用）"""
-    stats = dict(_query_stats)
-    stats["low_confidence_queries"] = list(_query_stats["low_confidence_queries"])
+    with _stats_lock:
+        stats = dict(_query_stats)
+        stats["low_confidence_queries"] = list(_query_stats["low_confidence_queries"])
     stats["exact_rate"] = round(stats["exact_hits"] / max(stats["total"], 1) * 100, 1)
     stats["semantic_rate"] = round(stats["semantic_hits"] / max(stats["total"], 1) * 100, 1)
     stats["keyword_rate"] = round(stats["keyword_hits"] / max(stats["total"], 1) * 100, 1)
