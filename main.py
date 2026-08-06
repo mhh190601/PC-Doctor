@@ -1550,7 +1550,7 @@ def add_hosts_entry(ip, domain):
 # ==================== 设置面板相关 ====================
 
 # 当前版本号（每次发版时手动更新）
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.7.0"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
 # C盘救星下载配置（文件名被 GitHub 截断为 C._v2.0.exe，原名为 C盘救星_v2.0.exe）

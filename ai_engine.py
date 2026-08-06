@@ -87,7 +87,7 @@ DEFAULT_CONFIG = {
         "model_name": "glm-4-flash",
         "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
         "timeout": 15,
-        "max_tokens": 500,
+        "max_tokens": 600,
         "temperature": 0.7,
     },
     "learning": {
@@ -783,9 +783,13 @@ class LocalModelInference:
         try:
             import requests
             system_prompt = (
-                "你是一位电脑维修专家。请用通俗易懂的中文回答用户的问题，"
-                "分步骤给出解决方案，避免过于专业的术语。回答尽量简洁，"
-                f"不超过{cfg['max_tokens']}字。"
+                "你是一位拥有20年实战经验的电脑维修专家，曾帮助成千上万用户解决过各类Windows系统故障。"
+                "你的回答必须满足以下要求：\n"
+                "1. 用完全不懂电脑的普通人听得懂的语言，避免任何专业术语；如果必须使用术语，请用括号通俗解释。\n"
+                "2. 分步骤回答，每一步用\"步骤1：\"、\"步骤2：\"开头，每步给出具体操作和注意事项。\n"
+                "3. 如果操作有风险（如修改注册表、删除系统文件），必须在开头用\"⚠️ 高风险操作提醒：\"明确标注。\n"
+                "4. 回答结尾给出\"💡 温馨提示\"，补充预防措施或替代方案。\n"
+                "5. 回答长度控制在400字以内，简洁有力，不啰嗦。"
             )
             resp = requests.post(
                 f"{cfg['base_url']}/api/generate",
@@ -854,9 +858,13 @@ class CloudAPI:
             import requests
 
             system_prompt = (
-                "你是一位电脑维修专家。请用通俗易懂的中文回答用户的问题，"
-                "分步骤给出解决方案，避免过于专业的术语。回答尽量简洁，"
-                f"不超过{cfg['max_tokens']}字。"
+                "你是一位拥有20年实战经验的电脑维修专家，曾帮助成千上万用户解决过各类Windows系统故障。"
+                "你的回答必须满足以下要求：\n"
+                "1. 用完全不懂电脑的普通人听得懂的语言，避免任何专业术语；如果必须使用术语，请用括号通俗解释。\n"
+                "2. 分步骤回答，每一步用\"步骤1：\"、\"步骤2：\"开头，每步给出具体操作和注意事项。\n"
+                "3. 如果操作有风险（如修改注册表、删除系统文件），必须在开头用\"⚠️ 高风险操作提醒：\"明确标注。\n"
+                "4. 回答结尾给出\"💡 温馨提示\"，补充预防措施或替代方案。\n"
+                "5. 回答长度控制在400字以内，简洁有力，不啰嗦。"
             )
 
             if cfg["provider"] == "zhipu":
@@ -882,7 +890,7 @@ class CloudAPI:
                     {"role": "user", "content": question},
                 ],
                 "temperature": cfg.get("temperature", 0.7),
-                "max_tokens": cfg.get("max_tokens", 500),
+                "max_tokens": cfg.get("max_tokens", 600),
             },
             timeout=cfg.get("timeout", 15),
         )
@@ -910,7 +918,7 @@ class CloudAPI:
                     {"role": "user", "content": question},
                 ],
                 "temperature": cfg.get("temperature", 0.7),
-                "max_tokens": cfg.get("max_tokens", 500),
+                "max_tokens": cfg.get("max_tokens", 600),
             },
             timeout=cfg.get("timeout", 15),
         )
@@ -937,7 +945,7 @@ class CloudAPI:
                     {"role": "user", "content": question},
                 ],
                 "temperature": cfg.get("temperature", 0.7),
-                "max_tokens": cfg.get("max_tokens", 500),
+                "max_tokens": cfg.get("max_tokens", 600),
             },
             timeout=cfg.get("timeout", 15),
         )
@@ -1085,8 +1093,9 @@ class KnowledgeBridge:
 
     @staticmethod
     def add_knowledge(question: str, answer: str, source: str = "auto",
-                      tags: str = "", severity: str = "中", reference: str = "") -> Optional[int]:
-        """添加新知识，返回新 ID"""
+                      tags: str = "", severity: str = "中", reference: str = "",
+                      weight: float = 1.0) -> Optional[int]:
+        """添加新知识，返回新 ID（支持 weight 参数控制初始权重）"""
         # tags 允许传入 list/tuple，统一转成逗号分隔字符串入库
         if isinstance(tags, (list, tuple)):
             tags = ",".join(str(t) for t in tags)
@@ -1101,8 +1110,8 @@ class KnowledgeBridge:
                 return existing[0]
             cur.execute(
                 "INSERT INTO knowledge (question, answer, source, weight, tags, severity, reference) "
-                "VALUES (?, ?, ?, 1.0, ?, ?, ?)",
-                (question, answer, source, tags, severity, reference),
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (question, answer, source, weight, tags, severity, reference),
             )
             conn.commit()
             new_id = cur.lastrowid
@@ -1761,7 +1770,8 @@ class AIEngine:
         return self._fallback_answer(question, t0, mode)
 
     def _web_search(self, question: str) -> Optional[dict]:
-        """联网搜索辅助方法，返回格式化答案或 None"""
+        """联网搜索辅助方法，返回格式化答案或 None
+        搜索结果自动缓存到本地知识库，下次同样问题可直接本地命中"""
         if not self.web_searcher:
             return None
         t0 = time.time()
@@ -1769,6 +1779,23 @@ class AIEngine:
         if text:
             logger.info(f"命中联网搜索: {question[:40]}...")
             _query_stats["cloud_hits"] += 1  # 复用 cloud 计数
+            # 搜索结果自动存入本地知识库（标记 source=web，低初始权重 0.3）
+            if self.config["learning"]["auto_learn"]:
+                try:
+                    kid = KnowledgeBridge.add_knowledge(
+                        question, text, source="web_search",
+                        tags="联网搜索,在线资源", severity="低", weight=0.3
+                    )
+                    if kid:
+                        self.semantic.add_document(kid, question, text, 0.3,
+                                                   source="web_search", tags="联网搜索,在线资源", severity="低")
+                        self.keyword.add_document(kid, question, text, 0.3,
+                                                  source="web_search", tags="联网搜索,在线资源", severity="低")
+                        self.tag_matcher.add_document(kid, question, text, 0.3,
+                                                      source="web_search", tags="联网搜索,在线资源", severity="低")
+                        logger.info(f"联网搜索结果已缓存到本地知识库: id={kid}")
+                except Exception as e:
+                    logger.warning(f"缓存联网搜索结果失败: {e}")
             return format_answer({
                 "success": True,
                 "answer": text,
@@ -1839,15 +1866,18 @@ class AIEngine:
 
     def add_knowledge(self, question: str, answer: str, source: str = "user",
                       tags: str = "", severity: str = "中") -> Optional[int]:
-        """手动添加知识"""
+        """手动添加知识（用户贡献默认低权重0.5，经点赞后可逐步提升）"""
+        # 用户贡献的知识初始权重为0.5，人工审核后可提升至1.0
+        initial_weight = 0.5 if source == "user" else 1.0
         kid = KnowledgeBridge.add_knowledge(question, answer, source=source,
-                                            tags=tags, severity=severity)
+                                            tags=tags, severity=severity,
+                                            weight=initial_weight)
         if kid:
-            self.semantic.add_document(kid, question, answer, 1.0,
+            self.semantic.add_document(kid, question, answer, initial_weight,
                                        source=source, tags=tags, severity=severity)
-            self.keyword.add_document(kid, question, answer, 1.0,
+            self.keyword.add_document(kid, question, answer, initial_weight,
                                       source=source, tags=tags, severity=severity)
-            self.tag_matcher.add_document(kid, question, answer, 1.0,
+            self.tag_matcher.add_document(kid, question, answer, initial_weight,
                                           source=source, tags=tags, severity=severity)
         return kid
 

@@ -1,6 +1,6 @@
 ; 电脑医生 安装脚本
 #define MyAppName "电脑医生"
-#define MyAppVersion "1.6.0"
+#define MyAppVersion "1.7.0"
 #define MyAppPublisher "mhh190601"
 #define MyAppURL "https://github.com/mhh190601/PC-Doctor"
 #define MyAppExeName "main.exe"
