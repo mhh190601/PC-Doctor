@@ -2010,6 +2010,20 @@
         downloadInterval = setInterval(async () => {
             try {
                 const progress = await eel.get_download_progress()();
+                
+                // 检测后端下载错误
+                if (progress.error) {
+                    clearInterval(downloadInterval);
+                    downloadInterval = null;
+                    cdiskStatus = 'none';
+                    updateCDiskUI();
+                    if (pm) pm.innerHTML = escapeHtml(progress.message || '下载失败，请重试')
+                        + ' <a href="https://github.com/mhh190601/PC-Doctor/releases/latest" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
+                    if (progressFill) progressFill.style.width = '0%';
+                    if (progressLabel) progressLabel.textContent = '';
+                    return;
+                }
+
                 if (progressFill) progressFill.style.width = progress.percent + '%';
                 if (progressLabel) progressLabel.textContent = '正在下载 ' + progress.percent + '%';
 
@@ -2032,12 +2046,12 @@
                     }
                 }
             } catch(e) {
-                // 检测到后端出错（install_cdisksaver 完成后 eel 调用可能返回错误）
+                // 通信异常（eel 调用失败）
                 clearInterval(downloadInterval);
                 downloadInterval = null;
                 cdiskStatus = 'none';
                 updateCDiskUI();
-                if (pm) pm.innerHTML = escapeHtml('下载异常，请重试')
+                if (pm) pm.innerHTML = escapeHtml('通信异常，请重试')
                     + ' <a href="https://github.com/mhh190601/PC-Doctor/releases/latest" target="_blank" style="color:#58a6ff;text-decoration:underline;">手动下载</a>';
                 if (progressFill) progressFill.style.width = '0%';
                 if (progressLabel) progressLabel.textContent = '';

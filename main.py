@@ -1550,11 +1550,11 @@ def add_hosts_entry(ip, domain):
 # ==================== 设置面板相关 ====================
 
 # 当前版本号（每次发版时手动更新）
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.6.0"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
-# C盘救星下载配置
-CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/cdisk-v1.0.0/C._v2.0.exe"
+# C盘救星下载配置（文件名被 GitHub 截断为 C._v2.0.exe，原名为 C盘救星_v2.0.exe）
+CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/v1.6.0/C._v2.0.exe"
 CDISK_SAVER_FILENAME = "C._v2.0.exe"
 
 # 下载进度（跨线程共享，前端轮询读取）
@@ -1562,6 +1562,7 @@ import threading
 _download_lock = threading.Lock()
 _download_progress = 0
 _download_total = 0
+_download_error = None   # 下载错误信息，None 表示正常
 
 
 # ============================================================
@@ -1593,24 +1594,29 @@ def is_cdisksaver_installed():
 @eel.expose
 def install_cdisksaver():
     """从 GitHub Release 直链下载 C 盘救星，支持实时进度回调"""
-    global _download_progress, _download_total
+    global _download_progress, _download_total, _download_error
 
     # 1. 网络检测
     if not check_network():
+        with _download_lock:
+            _download_error = "未连接互联网，无法下载"
         return {"success": False, "offline": True, "message": "未连接互联网，无法下载"}
 
     tools_dir = get_tools_dir()
     target = os.path.join(tools_dir, CDISK_SAVER_FILENAME)
 
     if os.path.exists(target):
+        with _download_lock:
+            _download_error = None
         return {"success": True, "message": "已安装，可直接打开"}
 
     os.makedirs(tools_dir, exist_ok=True)
 
-    # 重置进度
+    # 重置进度和错误
     with _download_lock:
         _download_progress = 0
         _download_total = 0
+        _download_error = None
 
     try:
         # 2. 流式下载（支持进度跟踪）
@@ -1632,13 +1638,21 @@ def install_cdisksaver():
         with _download_lock:
             downloaded = _download_progress
             total = _download_total
+            _download_error = None
         print(f"[C盘救星] 下载完成：{downloaded}/{total} 字节", flush=True)
         return {"success": True, "message": "下载完成，C盘救星已安装"}
     except requests.exceptions.ConnectionError:
+        with _download_lock:
+            _download_error = "网络连接失败，请检查网络"
         return {"success": False, "message": "网络连接失败，请检查网络"}
     except requests.exceptions.Timeout:
+        with _download_lock:
+            _download_error = "下载超时，请稍后重试"
         return {"success": False, "message": "下载超时，请稍后重试"}
     except Exception as e:
+        error_msg = f"下载失败：{str(e)[:100]}"
+        with _download_lock:
+            _download_error = error_msg
         # 清理残留文件
         for f in [target, target + '.tmp']:
             if os.path.exists(f):
@@ -1646,19 +1660,22 @@ def install_cdisksaver():
                     os.remove(f)
                 except Exception:
                     pass
-        return {"success": False, "message": f"下载失败：{str(e)[:100]}"}
+        return {"success": False, "message": error_msg}
 
 
 @eel.expose
 def get_download_progress():
-    """返回当前下载进度（前端轮询调用）"""
+    """返回当前下载进度（前端轮询调用），含错误状态"""
     with _download_lock:
         downloaded = _download_progress
         total = _download_total
+        error = _download_error
+    if error:
+        return {"percent": 0, "downloaded": 0, "total": 0, "error": True, "message": error}
     if total > 0:
         percent = round((downloaded / total) * 100, 1)
-        return {"percent": percent, "downloaded": downloaded, "total": total}
-    return {"percent": 0, "downloaded": 0, "total": 0}
+        return {"percent": percent, "downloaded": downloaded, "total": total, "error": False}
+    return {"percent": 0, "downloaded": 0, "total": 0, "error": False}
 
 
 @eel.expose

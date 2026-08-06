@@ -50,7 +50,9 @@
 
 ### 方式一：下载安装包（推荐）
 
-👉 **[点击下载最新版安装包](https://github.com/mhh190601/PC-Doctor/releases/download/v1.5.0/_v1.5.exe)**
+👉 **[点击下载最新版安装包](https://github.com/mhh190601/PC-Doctor/releases/download/v1.6.0/_v1.6.exe)**
+
+> 📌 **C盘救星** 已内置在软件中心的"一键下载"功能中，无需手动下载。
 
 下载后双击运行，按向导安装即可。  
 支持 Windows 7 及以上系统。
