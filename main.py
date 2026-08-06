@@ -430,11 +430,11 @@ def run_all_optimizations():
 
 # ================== 自学习AI诊断接口 ==================
 @eel.expose
-def ai_diagnose(problem_description):
-    """智能诊断：使用 AI 引擎多层匹配（精确匹配 → 标签匹配 → 语义检索 → 关键词兜底 → 云端）"""
+def ai_diagnose(problem_description, mode="auto"):
+    """智能诊断：使用 AI 引擎多层匹配（支持模式切换：auto/local/cloud/search）"""
     from ai_engine import get_engine, format_answer
     engine = get_engine()
-    result = engine.ask(problem_description)
+    result = engine.ask(problem_description, mode=mode)
 
     # 判断是否电脑问题（非电脑相关 + fallback → 友好提示）
     if not result["success"] and result["layer"] == "fallback":
@@ -2728,6 +2728,153 @@ def write_iso_to_usb(iso_path, target_drive):
         return {"success": False, "message": "写入超时（超过30分钟），请检查ISO文件和U盘状态。"}
     except Exception as e:
         return {"success": False, "message": str(e)[:200]}
+
+# ================== 安全体检（Windows 安全中心集成）==================
+
+def _run_ps(command: str, timeout: int = 8) -> str:
+    """安全执行 PowerShell 命令，返回 stdout 文本"""
+    try:
+        result = subprocess.run(
+            ['powershell', '-NoProfile', '-Command', command],
+            capture_output=True, text=True, timeout=timeout,
+            creationflags=CREATE_NO_WINDOW
+        )
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
+    except Exception:
+        return ""
+
+@eel.expose
+def get_security_status():
+    """获取 Windows 安全中心各项防护状态（纯读取，零风险）"""
+    status = {
+        "defender_enabled": False,
+        "av_version": "未知",
+        "av_updated": "未知",
+        "last_quick_scan": "从未扫描",
+        "threats_found": 0,
+        "firewall_on": False,
+        "smartscreen_on": False,
+        "memory_integrity": False,
+        "secure_boot": False,
+        "real_time_protection": False,
+        "overall_score": 0,  # 0-5 安全评分
+    }
+
+    try:
+        # -- Defender 状态（Get-MpComputerStatus）--
+        raw = _run_ps(
+            '$s=Get-MpComputerStatus -ErrorAction SilentlyContinue;'
+            'Write-Host $s.AntispywareEnabled;'
+            'Write-Host $s.AntispywareSignatureVersion;'
+            'Write-Host $s.AntispywareSignatureLastUpdated;'
+            'Write-Host $s.QuickScanEndTime;'
+            'Write-Host $s.RealTimeProtectionEnabled'
+        )
+        lines = [l.strip() for l in raw.split('\n') if l.strip()]
+        if len(lines) >= 1:
+            status["defender_enabled"] = lines[0].lower() == "true"
+        if len(lines) >= 2:
+            status["av_version"] = lines[1]
+        if len(lines) >= 3:
+            status["av_updated"] = lines[2]
+        if len(lines) >= 4 and lines[3]:
+            try:
+                dt = lines[3]
+                status["last_quick_scan"] = dt.split(' ')[0] if ' ' in dt else dt[:10]
+            except Exception:
+                status["last_quick_scan"] = lines[3][:19]
+        if len(lines) >= 5:
+            status["real_time_protection"] = lines[4].lower() == "true"
+    except Exception:
+        pass
+
+    try:
+        # -- 防火墙状态（Get-NetFirewallProfile）--
+        fw = _run_ps(
+            '$p=Get-NetFirewallProfile -ErrorAction SilentlyContinue;'
+            '($p | ForEach-Object {$_.Enabled}) -join ","'
+        )
+        status["firewall_on"] = "True" in fw
+    except Exception:
+        pass
+
+    try:
+        # -- SmartScreen --
+        ss = _run_ps(
+            '$r=Get-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer" '
+            '-Name "SmartScreenEnabled" -ErrorAction SilentlyContinue;'
+            'Write-Host $r.SmartScreenEnabled'
+        )
+        status["smartscreen_on"] = ss.lower() in ("on", "requireadmin", "prompt")
+    except Exception:
+        pass
+
+    try:
+        # -- 内存完整性（内核隔离）--
+        mi = _run_ps(
+            '$d=Get-CimInstance -ClassName Win32_DeviceGuard '
+            '-Namespace root\\Microsoft\\Windows\\DeviceGuard '
+            '-ErrorAction SilentlyContinue;'
+            'Write-Host $d.SecurityServicesRunning'
+        )
+        status["memory_integrity"] = "HypervisorEnforcedCodeIntegrity" in mi
+    except Exception:
+        pass
+
+    try:
+        # -- 安全启动 --
+        sb = _run_ps('Confirm-SecureBootUEFI -ErrorAction SilentlyContinue; Write-Host $?')
+        status["secure_boot"] = "True" in sb
+    except Exception:
+        pass
+
+    try:
+        # -- 威胁计数 --
+        tc = _run_ps(
+            'try { $t=Get-MpThreat -ErrorAction Stop; Write-Host $t.Count } catch { Write-Host 0 }'
+        )
+        status["threats_found"] = int(tc) if tc.isdigit() else 0
+    except Exception:
+        pass
+
+    # -- 计算安全评分 --
+    score = 0
+    if status["defender_enabled"]: score += 1
+    if status["real_time_protection"]: score += 1
+    if status["firewall_on"]: score += 1
+    if status["smartscreen_on"]: score += 1
+    if status["memory_integrity"]: score += 1
+    status["overall_score"] = score
+
+    return status
+
+@eel.expose
+def launch_defender_scan(scan_type: str = "quick"):
+    """启动 Windows Defender 扫描（quick/full/custom）并以低权限窗口通知用户"""
+    try:
+        if scan_type == "full":
+            subprocess.Popen(
+                ['powershell', '-Command', 'Start-MpScan -ScanType FullScan'],
+                creationflags=CREATE_NO_WINDOW
+            )
+            return {"success": True, "message": "已启动完整扫描，请稍后查看结果。"}
+        else:
+            os.startfile("windowsdefender://threat")
+            return {"success": True, "message": "已打开 Windows 安全中心。"}
+    except Exception as e:
+        return {"success": False, "message": f"启动失败：{str(e)[:100]}"}
+
+@eel.expose
+def open_windows_security():
+    """打开 Windows 安全中心"""
+    try:
+        os.startfile("windowsdefender://")
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)[:100]}
+
 
 # ================== 启动 ==================
 import atexit

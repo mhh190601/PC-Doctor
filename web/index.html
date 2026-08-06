@@ -534,6 +534,43 @@
         .chat-input button svg {
             stroke: #fff;
         }
+        /* AI 模式选择器 */
+        .ai-mode-selector {
+            display: flex;
+            gap: 6px;
+            padding: 8px 20px 0 20px;
+            background: var(--surface);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .ai-mode-selector .mode-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-right: 4px;
+            user-select: none;
+        }
+        .ai-mode-selector .mode-btn {
+            padding: 4px 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .ai-mode-selector .mode-btn:hover {
+            border-color: #0550ae;
+            color: #58a6ff;
+        }
+        .ai-mode-selector .mode-btn.active {
+            background: #0550ae;
+            color: #fff;
+            border-color: #0550ae;
+            box-shadow: 0 0 8px rgba(5,80,174,0.3);
+        }
 
         /* 欢迎卡片 */
         .welcome-card {
@@ -1648,6 +1685,13 @@
                     </div>
                     <!-- 输入区域 -->
                     <div class="chat-input">
+                        <div class="ai-mode-selector">
+                            <span class="mode-label">AI 模式</span>
+                            <button class="mode-btn active" data-mode="auto" title="智能自动选择">⚡ 智能</button>
+                            <button class="mode-btn" data-mode="local" title="仅本地检索">🏠 本地</button>
+                            <button class="mode-btn" data-mode="cloud" title="云端大模型">☁️ 云端</button>
+                            <button class="mode-btn" data-mode="search" title="联网搜索">🌐 联网</button>
+                        </div>
                         <input type="text" id="userInput" placeholder="描述你的电脑问题，例如：电脑卡顿怎么办？" onkeydown="if(event.key==='Enter')sendDiagnosis()">
                         <button onclick="sendDiagnosis()">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -2444,6 +2488,30 @@
         } catch (error) { updateModalContent(`<p style="color:red;">分析失败：${error}</p>`); }
     }
 
+    // ========== AI 模式切换 ==========
+    let currentAIMode = 'auto';
+    
+    function initAIModeSelector() {
+        const container = document.querySelector('.ai-mode-selector');
+        if (!container) return;
+        container.addEventListener('click', function(e) {
+            const btn = e.target.closest('.mode-btn');
+            if (!btn) return;
+            container.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAIMode = btn.dataset.mode;
+            // 更新输入框 placeholder 提示
+            const hints = {
+                'auto': '智能模式：自动选择最佳回答方式',
+                'local': '本地模式：仅使用本地知识库和模型',
+                'cloud': '云端模式：调用在线大模型深度回答',
+                'search': '联网模式：实时搜索最新解决方案'
+            };
+            const input = document.getElementById('userInput');
+            if (input) input.placeholder = hints[currentAIMode] || hints['auto'];
+        });
+    }
+
     // ========== 智能问答（在聊天面板） ==========
     async function sendDiagnosis() {
         switchPanel('chat');
@@ -2454,7 +2522,7 @@
         input.value = '';
         currentUserQuestion = question;
         try {
-            const result = await eel.ai_diagnose(question)();
+            const result = await eel.ai_diagnose(question, currentAIMode)();
             if (result.success) {
                 // 构建答案 + 来源引用 + 置信度 + 风险标签
                 const msgDiv = addChatMessage(result.answer, 'ai');
@@ -4269,6 +4337,9 @@
             downloadInterval = null;
         }
     });
+
+    // 初始化 AI 模式选择器
+    initAIModeSelector();
 })();
 </script>
 </body>
