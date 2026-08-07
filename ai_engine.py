@@ -1052,8 +1052,53 @@ class KnowledgeBridge:
     DB_PATH = _knowledge_db_path()
 
     @staticmethod
+    def _sync_from_json():
+        """从 knowledge_base_v2.json 自动导入缺失的知识条目到 SQLite"""
+        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base_v2.json")
+        if not os.path.exists(json_path):
+            return
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                items = json.load(f)
+            if not isinstance(items, list):
+                return
+            conn = sqlite3.connect(KnowledgeBridge.DB_PATH)
+            cur = conn.cursor()
+            for item in items:
+                q = item.get("question", "")
+                if not q:
+                    continue
+                cur.execute("SELECT id FROM knowledge WHERE question = ?", (q,))
+                if cur.fetchone():
+                    continue  # 已存在，跳过
+                tags_val = item.get("tags", "")
+                if isinstance(tags_val, list):
+                    tags_val = ",".join(tags_val)
+                cur.execute(
+                    "INSERT INTO knowledge (question, answer, source, weight, tags, severity, reference) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        q,
+                        item.get("answer", ""),
+                        item.get("source", "电脑医生知识库"),
+                        1.0,  # JSON 导入的知识默认权重 1.0
+                        tags_val,
+                        item.get("severity", "中"),
+                        "",
+                    ),
+                )
+            conn.commit()
+            conn.close()
+            added = cur.rowcount
+            if added > 0:
+                logger.info(f"从 JSON 导入 {added} 条新知识到 SQLite")
+        except Exception as e:
+            logger.warning(f"JSON 知识同步失败: {e}")
+
+    @staticmethod
     def load_all() -> list[dict]:
-        """加载所有知识: [{id, question, answer, weight, source, tags, severity}, ...]"""
+        """加载所有知识（自动同步 JSON 新条目）"""
+        KnowledgeBridge._sync_from_json()
         try:
             conn = sqlite3.connect(KnowledgeBridge.DB_PATH)
             cur = conn.cursor()
