@@ -1,0 +1,46 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Databases (runtime generated)
+*.db
+pc_doctor_knowledge.db
+*.sqlite
+*.sqlite3
+
+# Vector / model caches (large, runtime generated)
+.pc_doctor_vectors_cache.npy
+.model_cache/
+
+# Build outputs
+build/
+dist/
+*.spec
+*.egg-info/
+
+# Editor / IDE
+.vs/
+.idea/
+
+# Logs
+*.log
+test_run.log
+
+# Test artifacts
+test_report.json
+test_report_v2.json
+screenshots/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+C盘救星/
+
+# Agent memory (do not commit)
+.codebuddy/
+
+# Misc
+.gitignore.txt

@@ -1,0 +1,343 @@
+[
+  {
+    "code": "0x000000ef",
+    "name": "CRITICAL_PROCESS_DIED",
+    "cause": "关键系统进程意外终止，通常由驱动冲突、系统文件损坏或硬盘故障引起",
+    "solution": "1. 更新显卡驱动和主板芯片组驱动到最新版本\n2. 以管理员身份运行命令提示符，输入 sfc /scannow 修复系统文件\n3. 检查硬盘健康度，使用 CrystalDiskInfo 工具\n4. 如果近期安装过新软件或硬件，尝试卸载或移除\n5. 运行 DISM 修复系统映像：DISM /Online /Cleanup-Image /RestoreHealth",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "系统文件",
+      "硬盘"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000001a",
+    "name": "MEMORY_MANAGEMENT",
+    "cause": "内存管理错误，通常是内存条故障或驱动内存泄漏导致",
+    "solution": "1. 运行 Windows 内存诊断工具：在开始菜单搜索 mdsched\n2. 如果有两根以上内存条，尝试逐一拔下测试是哪根有问题\n3. 更新主板 BIOS 到最新版本\n4. 检查是否有最近安装的软件导致内存泄漏，尝试卸载",
+    "tags": [
+      "蓝屏",
+      "内存",
+      "驱动"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000003b",
+    "name": "SYSTEM_SERVICE_EXCEPTION",
+    "cause": "系统服务异常，通常由显卡驱动或防病毒软件触发",
+    "solution": "1. 更新或回滚显卡驱动\n2. 暂时关闭或卸载第三方防病毒软件\n3. 运行 sfc /scannow 检查系统文件\n4. 检查最近安装的 Windows 更新，如果有问题可以卸载",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "显卡",
+      "杀毒"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x0000007b",
+    "name": "INACCESSIBLE_BOOT_DEVICE",
+    "cause": "系统无法访问启动设备，常见于硬盘模式更改或硬盘故障",
+    "solution": "1. 进入 BIOS，检查硬盘模式是否为 AHCI（不要用 IDE 或 RAID 除非需要）\n2. 检查硬盘数据线和电源线是否连接牢固\n3. 尝试用 Windows 安装 U 盘启动，选择\"修复计算机\"\n4. 如果硬盘检测失败，可能需要更换硬盘",
+    "tags": [
+      "蓝屏",
+      "启动",
+      "硬盘",
+      "BIOS"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000050",
+    "name": "PAGE_FAULT_IN_NONPAGED_AREA",
+    "cause": "系统尝试访问不存在的内存地址，通常由内存故障或损坏的驱动引起",
+    "solution": "1. 运行 Windows 内存诊断工具\n2. 进入安全模式，卸载最近安装的驱动程序\n3. 关闭快速启动：控制面板 → 电源选项 → 选择电源按钮的功能 → 取消\"启用快速启动\"\n4. 检查硬盘错误：以管理员身份运行 chkdsk C: /f /r",
+    "tags": [
+      "蓝屏",
+      "内存",
+      "驱动"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0xc000021a",
+    "name": "STATUS_SYSTEM_PROCESS_TERMINATED",
+    "cause": "Winlogon.exe 或 CSRSS.exe 进程意外终止，通常因第三方软件或系统文件损坏",
+    "solution": "1. 进入高级启动选项 → 安全模式\n2. 在安全模式下卸载最近安装的软件\n3. 以管理员身份运行 sfc /scannow 和 DISM /Online /Cleanup-Image /RestoreHealth\n4. 如果仍无效，使用系统还原或重置此电脑",
+    "tags": [
+      "蓝屏",
+      "启动",
+      "系统文件"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x000000d1",
+    "name": "DRIVER_IRQL_NOT_LESS_OR_EQUAL",
+    "cause": "驱动程序在不适当的 IRQL 级别访问了无效内存地址",
+    "solution": "1. 检查蓝屏信息中提到的驱动文件（如 .sys 结尾的文件名）\n2. 更新或回滚对应的驱动程序\n3. 更新网卡驱动（这是最常见的触发者）\n4. 进入安全模式排除驱动问题",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "网卡"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x0000009f",
+    "name": "DRIVER_POWER_STATE_FAILURE",
+    "cause": "驱动程序电源状态切换失败，常见于休眠/睡眠唤醒时",
+    "solution": "1. 更新显卡、网卡、声卡驱动到最新版本\n2. 在设备管理器中，右键各设备 → 属性 → 电源管理 → 取消\"允许计算机关闭此设备以节约电源\"\n3. 关闭快速启动功能\n4. 检查是否有 BIOS 更新",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "休眠"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x00000024",
+    "name": "NTFS_FILE_SYSTEM",
+    "cause": "NTFS 文件系统出现错误，硬盘可能存在坏道或文件系统损坏",
+    "solution": "1. 立即备份重要数据\n2. 以管理员身份运行 chkdsk C: /f /r，会提示下次重启时检查，选 Y 并重启\n3. 使用 CrystalDiskInfo 检查硬盘 SMART 健康状态\n4. 如果硬盘已有坏道，尽快更换",
+    "tags": [
+      "蓝屏",
+      "硬盘",
+      "文件系统"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000004e",
+    "name": "PFN_LIST_CORRUPT",
+    "cause": "页面帧号列表损坏，通常由内存故障或驱动问题引起",
+    "solution": "1. 运行 Windows 内存诊断工具\n2. 更新或回滚显卡驱动\n3. 关闭不必要的开机启动项\n4. 检查是否有内存超频，恢复默认设置",
+    "tags": [
+      "蓝屏",
+      "内存",
+      "驱动"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000001e",
+    "name": "KMODE_EXCEPTION_NOT_HANDLED",
+    "cause": "内核模式程序产生未被处理的异常",
+    "solution": "1. 记下蓝屏界面显示的驱动文件名（.sys 后缀）\n2. 在安全模式下卸载该驱动对应的软件\n3. 更新所有硬件驱动\n4. 运行 sfc /scannow 检查系统文件完整性",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "内核"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000101",
+    "name": "CLOCK_WATCHDOG_TIMEOUT",
+    "cause": "处理器时钟中断超时，通常由 CPU 超频或散热问题引起",
+    "solution": "1. 进入 BIOS 恢复默认设置（特别是关闭 CPU 超频）\n2. 清理 CPU 散热器灰尘，检查散热风扇是否正常运转\n3. 更新主板 BIOS 到最新版本\n4. 如果 CPU 已老化或长期高温运行，考虑更换",
+    "tags": [
+      "蓝屏",
+      "CPU",
+      "散热",
+      "超频"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x00000116",
+    "name": "VIDEO_TDR_FAILURE",
+    "cause": "显卡驱动超时无响应，图形处理任务失败",
+    "solution": "1. 使用 DDU 工具彻底卸载显卡驱动，然后重装最新版\n2. 检查显卡温度是否过高，清理灰尘\n3. 降低显卡超频设置（如果有的话）\n4. 如果是笔记本双显卡，尝试在 BIOS 中切换显示模式\n5. 如果反复出现，显卡硬件可能已损坏",
+    "tags": [
+      "蓝屏",
+      "显卡",
+      "驱动",
+      "散热"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x000000f4",
+    "name": "CRITICAL_OBJECT_TERMINATION",
+    "cause": "关键系统进程或线程被终止，通常由硬盘故障、内存问题或系统文件损坏引起",
+    "solution": "1. 检查硬盘数据线和电源线是否松动\n2. 使用 CrystalDiskInfo 检测硬盘健康状态\n3. 运行 sfc /scannow 和 chkdsk C: /f /r\n4. 拔下并重新插紧内存条\n5. 更新主板芯片组驱动",
+    "tags": [
+      "蓝屏",
+      "硬盘",
+      "内存"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x0000007e",
+    "name": "SYSTEM_THREAD_EXCEPTION_NOT_HANDLED",
+    "cause": "系统线程产生未处理的异常",
+    "solution": "1. 排查最近安装的软件或驱动，尝试卸载\n2. 更新所有驱动程序\n3. 运行 sfc /scannow 修复系统文件\n4. 清理磁盘空间，确保系统盘有足够剩余空间",
+    "tags": [
+      "蓝屏",
+      "驱动",
+      "软件冲突"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x80070005",
+    "name": "E_ACCESSDENIED / 访问被拒绝",
+    "cause": "权限不足，程序或用户无权访问目标文件、文件夹、注册表项或服务",
+    "solution": "1. 以管理员身份运行对应的程序\n2. 右键目标文件夹 → 属性 → 安全 → 编辑 → 添加当前用户并赋予完全控制权限\n3. 使用 takeown /f 路径 /r 命令获取文件所有权\n4. 检查是否有防病毒软件阻止了操作，临时关闭后重试",
+    "tags": [
+      "权限",
+      "访问",
+      "安全",
+      "错误"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x80070002",
+    "name": "ERROR_FILE_NOT_FOUND / 文件未找到",
+    "cause": "系统或应用程序尝试访问的文件不存在，可能是文件已被删除或路径不正确",
+    "solution": "1. 确认文件是否确实存在，检查路径拼写是否正确\n2. 如果是软件报错，尝试重新安装该软件\n3. 如果是Windows更新报错，运行 sfc /scannow 检查系统文件\n4. 检查磁盘是否有错误：chkdsk C: /f /r",
+    "tags": [
+      "文件",
+      "路径",
+      "错误"
+    ],
+    "severity": "低"
+  },
+  {
+    "code": "0x80070643",
+    "name": "ERROR_INSTALL_FAILURE / 安装失败",
+    "cause": "软件安装或更新过程中遇到致命错误，常见于.NET Framework或Windows更新安装",
+    "solution": "1. 如果是 Windows 更新失败，先清理更新缓存：停掉 wuauserv 服务，删除 C:\\Windows\\SoftwareDistribution 文件夹，重启服务\n2. 如果是 .NET Framework 更新失败，到微软官网下载 .NET Framework Repair Tool 工具修复\n3. 暂时关闭第三方防病毒软件后重试安装\n4. 如果是 Office 更新失败，使用 Office 修复工具",
+    "tags": [
+      "安装",
+      "更新",
+      "错误",
+      "Windows"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x800F0922",
+    "name": "CBS_E_INSTALLERS_FAILED / 更新空间不足",
+    "cause": "系统保留分区或C盘空间不足，导致Windows更新无法完成",
+    "solution": "1. 清理C盘空间，确保至少有 10GB 以上的可用空间\n2. 使用磁盘清理工具清理 Windows 更新缓存\n3. 使用本软件的「C盘清理」功能释放空间\n4. 如果系统保留分区空间不足，需要用第三方分区工具扩展该分区",
+    "tags": [
+      "更新",
+      "磁盘",
+      "C盘",
+      "空间"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x80070422",
+    "name": "ERROR_SERVICE_DISABLED / 服务已禁用",
+    "cause": "Windows Update 或相关服务被禁用，导致无法检查/下载更新",
+    "solution": "1. 按 Win+R 输入 services.msc，找到 Windows Update 服务\n2. 将启动类型改为「手动」或「自动」，点击「启动」\n3. 同时确保 Background Intelligent Transfer Service 和 Cryptographic Services 服务也在运行\n4. 如果服务启动后又自动停止，运行 sfc /scannow 修复系统文件",
+    "tags": [
+      "更新",
+      "服务",
+      "Windows"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x80004005",
+    "name": "E_FAIL / 未指定错误",
+    "cause": "通用错误代码，可能由多种原因引起：权限问题、注册表损坏、虚拟化软件冲突等",
+    "solution": "1. 以管理员身份运行遇到问题的程序\n2. 检查是否安装了虚拟机软件（如 VirtualBox），卸载后重试\n3. 运行 sfc /scannow 和 DISM 修复系统\n4. 如果是 Office 相关错误，重置 Office 激活状态",
+    "tags": [
+      "错误",
+      "权限",
+      "系统"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0xc0000005",
+    "name": "STATUS_ACCESS_VIOLATION / 内存访问违规",
+    "cause": "程序尝试访问无效的内存地址，通常由程序bug、驱动冲突或内存硬件故障引起",
+    "solution": "1. 如果是特定程序报错，重新安装该程序\n2. 更新所有驱动程序，特别是显卡驱动\n3. 运行 Windows 内存诊断工具检查内存条\n4. 关闭DEP（数据执行保护）对该程序的限制：系统属性 → 高级 → 性能设置 → 数据执行保护 → 添加例外",
+    "tags": [
+      "内存",
+      "崩溃",
+      "程序",
+      "错误"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0x800B0100",
+    "name": "TRUST_E_NOSIGNATURE / 无数字签名",
+    "cause": "驱动程序或系统文件没有有效的数字签名，被Windows安全策略阻止安装",
+    "solution": "1. 从硬件或软件官网下载有数字签名的正版驱动\n2. 按 Win+R 输入 gpedit.msc → 计算机配置 → 管理模板 → 系统 → 驱动程序安装 → 双击「设备驱动程序的代码签名」设为「已禁用」\n3. 如果只是想临时安装，可以在启动时按 F8 选择「禁用驱动程序强制签名」模式\n4. ⚠️ 不要长期运行未签名的驱动，有安全风险",
+    "tags": [
+      "驱动",
+      "签名",
+      "安全"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x8024402F",
+    "name": "WU_E_PT_ECP_FAILURE / Windows更新服务器连接失败",
+    "cause": "Windows Update 客户端无法连接到微软更新服务器，通常由网络或代理问题引起",
+    "solution": "1. 检查网络连接是否正常，能否正常访问其他网站\n2. 关闭代理和VPN后再试\n3. 将 DNS 服务器改为 114.114.114.114 或 8.8.8.8\n4. 重置 Windows Update 组件：以管理员身份运行命令提示符，依次输入 net stop wuauserv, net stop bits, 删除 C:\\Windows\\SoftwareDistribution 文件夹，再 net start wuauserv, net start bits",
+    "tags": [
+      "更新",
+      "网络",
+      "DNS",
+      "错误"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x000000A5",
+    "name": "ACPI_BIOS_ERROR / ACPI BIOS 错误",
+    "cause": "BIOS中的高级配置和电源接口(ACPI)与操作系统不一致，通常在安装系统或更新BIOS后出现",
+    "solution": "1. 重启电脑进入 BIOS 设置，加载默认设置（Load Optimized Defaults）后保存退出\n2. 更新主板 BIOS 到最新版本，去主板官网下载对应的 BIOS 更新\n3. 如果是安装 Windows 7 时出现，在 BIOS 中关闭 ACPI 或使用 ACPI 兼容模式\n4. 检查硬件是否有不兼容的设备，特别是老旧的 PCI/PCIe 设备",
+    "tags": [
+      "蓝屏",
+      "BIOS",
+      "ACPI",
+      "主板"
+    ],
+    "severity": "高"
+  },
+  {
+    "code": "0xc000007b",
+    "name": "STATUS_INVALID_IMAGE_FORMAT / 无效的映像格式",
+    "cause": "应用程序尝试加载32位和64位的DLL混合使用，通常是缺少对应的运行时库（如DirectX、VC++运行库）",
+    "solution": "1. 安装 DirectX 修复工具（DirectX Repair），它会自动扫描并修复缺失的 DLL 文件\n2. 安装/修复 Visual C++ 运行库合集（包含2005-2022所有版本），微软官网可下载\n3. 在程序安装目录下，以管理员身份运行对应的 .exe 文件\n4. 如果是游戏报错，验证游戏文件完整性（Steam/Epic 有自带的验证功能）",
+    "tags": [
+      "错误",
+      "DLL",
+      "DirectX",
+      "VC运行库",
+      "程序"
+    ],
+    "severity": "中"
+  },
+  {
+    "code": "0x0000028b",
+    "name": "宽带连接错误651",
+    "description": "调制解调器（或其他连接设备）报告了一个错误",
+    "cause": "网卡驱动故障、调制解调器问题、PPPoE拨号服务异常、网线接触不良",
+    "solution": "1. 重启调制解调器（光猫）和路由器，等指示灯稳定后再拨号\n2. 检查网线连接：确保电脑到调制解调器的网线插紧\n3. 重建宽带连接：删除现有宽带连接，重新创建一个PPPoE拨号连接\n4. 以管理员打开cmd输入：netsh winsock reset 然后重启\n5. 设备管理器→网络适配器→右键网卡→卸载→重启自动重装驱动\n6. 如果以上都不行，联系宽带运营商（电信/联通/移动）确认线路是否正常",
+    "tags": [
+      "宽带",
+      "651",
+      "网络",
+      "拨号",
+      "PPPoE",
+      "调制解调器"
+    ],
+    "severity": "高"
+  }
+]
