@@ -667,6 +667,9 @@ class TagMatcher:
         q_tokens = self._tokenize(query)
         if not q_tokens:
             return []
+        # 至少要有1个长度≥2的token（有实际语义），避免"1""a"等单字符误匹配
+        if not any(len(t) >= 2 for t in q_tokens):
+            return []
         results = []
         for doc in self.documents:
             doc_tags = set(doc.get("tags", []))
