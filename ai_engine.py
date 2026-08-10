@@ -1446,8 +1446,22 @@ def format_answer(raw: dict) -> dict:
     if not source_url and isinstance(source, str) and source.startswith("http"):
         source_url = source
 
+    # 来源类型：自研本地 vs 云端AI
+    layer = raw.get("layer", "")
+    if layer in ("cloud", "web_search"):
+        source_type = "ai_cloud"
+        source_label = "云端智能 · 联网"
+        source_badge = "cloud"
+    else:
+        source_type = "self_developed"
+        source_label = "自研模型 · 本地"
+        source_badge = "local"
+
     out = dict(raw)
     out.update({
+        "source_type": source_type,
+        "source_label": source_label,
+        "source_badge": source_badge,
         "score_percent": int(round(score * 100)),
         "confidence": confidence,
         "confidence_color": confidence_color,

@@ -571,6 +571,18 @@
             border-color: #0550ae;
             box-shadow: 0 0 8px rgba(5,80,174,0.3);
         }
+        .ai-mode-selector .mode-btn-secondary {
+            opacity: 0.65;
+            font-size: 11px;
+            padding: 4px 10px;
+        }
+        .ai-mode-selector .mode-btn-secondary:hover {
+            opacity: 0.9;
+        }
+        .ai-mode-selector .mode-btn-secondary.active {
+            opacity: 1;
+            box-shadow: 0 0 6px rgba(5,80,174,0.2);
+        }
 
         /* 欢迎卡片 */
         .welcome-card {
@@ -1747,10 +1759,10 @@
                     <div class="chat-input">
                         <div class="ai-mode-selector">
                             <span class="mode-label">AI 模式</span>
-                            <button class="mode-btn active" data-mode="auto" title="智能自动选择">⚡ 智能</button>
-                            <button class="mode-btn" data-mode="local" title="仅本地检索">🏠 本地</button>
-                            <button class="mode-btn" data-mode="cloud" title="云端大模型">☁️ 云端</button>
-                            <button class="mode-btn" data-mode="search" title="联网搜索">🌐 联网</button>
+                            <button class="mode-btn active" data-mode="auto" title="自研优先，云端兜底，自动选择最佳方案">⚡ 智能</button>
+                            <button class="mode-btn" data-mode="local" title="纯自研AI，完全离线，速度最快">🧪 自研</button>
+                            <button class="mode-btn" data-mode="cloud" title="云端大模型 · 自动联网增强">☁️ 云端</button>
+                            <button class="mode-btn mode-btn-secondary" data-mode="search" title="仅网络搜索，不使用AI生成">🔍 搜索</button>
                         </div>
                         <input type="text" id="userInput" placeholder="描述你的电脑问题，例如：电脑卡顿怎么办？" onkeydown="if(event.key==='Enter')sendDiagnosis()">
                         <button onclick="sendDiagnosis()">
@@ -2616,10 +2628,10 @@
             currentAIMode = btn.dataset.mode;
             // 更新输入框 placeholder 提示
             const hints = {
-                'auto': '智能模式：自动选择最佳回答方式',
-                'local': '本地模式：仅使用本地知识库和模型',
-                'cloud': '云端模式：调用在线大模型深度回答',
-                'search': '联网模式：实时搜索最新解决方案'
+                'auto': '智能模式：自研优先，云端兜底，自动选择最佳回答',
+                'local': '自研模式：纯本地AI，完全离线，速度最快',
+                'cloud': '云端模式：调用在线大模型深度回答 · 自动联网',
+                'search': '搜索模式：实时网络搜索，不调用AI生成'
             };
             const input = document.getElementById('userInput');
             if (input) input.placeholder = hints[currentAIMode] || hints['auto'];
@@ -2649,6 +2661,20 @@
                 }
                 const msgDiv = addChatMessage(answerText, 'ai');
                 const bubble = msgDiv.querySelector('.msg-bubble');
+
+                // === 来源徽章：清晰区分自研AI vs 云端AI ===
+                if (result.source_type) {
+                    const sourceBadge = document.createElement('div');
+                    const isCloud = result.source_type === 'ai_cloud';
+                    sourceBadge.style.cssText = isCloud
+                        ? 'display:inline-block; margin-bottom:8px; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:600; background:linear-gradient(135deg,rgba(63,185,80,0.15),rgba(56,139,253,0.12)); color:#3fb950; border:1px solid rgba(63,185,80,0.3);'
+                        : 'display:inline-block; margin-bottom:8px; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:600; background:rgba(88,166,255,0.1); color:#58a6ff; border:1px solid rgba(88,166,255,0.25);';
+                    sourceBadge.textContent = isCloud ? '🌐 云端智能' : '🧪 自研模型';
+                    if (result.source_label) {
+                        sourceBadge.title = result.source_label + ' | 匹配层级: ' + (result.layer || '未知');
+                    }
+                    bubble.appendChild(sourceBadge);
+                }
 
                 // 元信息：置信度 + 匹配层级 + 来源
                 const meta = document.createElement('div');
