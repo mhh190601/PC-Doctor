@@ -4526,31 +4526,50 @@
 <script>
 // 处理HTML中的 ${iconXxx()} 模板调用（修复：递归遍历所有文本节点，覆盖静态与动态注入内容）
 (function processIconTemplates() {
-    if (typeof iconChat !== 'function') return; // 图标库未加载则跳过
-    var iconFns = { iconChat: iconChat, iconOptimize: iconOptimize, iconTools: iconTools, iconSettings: iconSettings, iconScan: iconScan, iconClean: iconClean, iconMemory: iconMemory, iconPrivacy: iconPrivacy, iconNetwork: iconNetwork, iconMenu: iconMenu, iconStartup: iconStartup, iconBlock: iconBlock, iconBoot: iconBoot, iconInfo: iconInfo, iconFolder: iconFolder, iconDuplicate: iconDuplicate, iconUninstall: iconUninstall, iconShredder: iconShredder, iconUSB: iconUSB, iconCpu: iconCpu, iconShield: iconShield, iconGpu: iconGpu, iconThermo: iconThermo, iconAppStore: iconAppStore, iconCDisk: iconCDisk };
+    // 收集已定义的图标函数（缺哪个就保留哪个字面量，其余照常替换，避免“一损俱损”）
+    var src = { iconChat: iconChat, iconOptimize: iconOptimize, iconTools: iconTools, iconSettings: iconSettings, iconScan: iconScan, iconClean: iconClean, iconMemory: iconMemory, iconPrivacy: iconPrivacy, iconNetwork: iconNetwork, iconMenu: iconMenu, iconStartup: iconStartup, iconBlock: iconBlock, iconBoot: iconBoot, iconInfo: iconInfo, iconFolder: iconFolder, iconDuplicate: iconDuplicate, iconUninstall: iconUninstall, iconShredder: iconShredder, iconUSB: iconUSB, iconCpu: iconCpu, iconShield: iconShield, iconGpu: iconGpu, iconThermo: iconThermo, iconAppStore: iconAppStore, iconCDisk: iconCDisk };
+    var iconFns = {};
+    for (var k in src) { if (typeof src[k] === 'function') iconFns[k] = src[k]; }
+    if (Object.keys(iconFns).length === 0) return; // 图标库完全未加载则跳过
 
-    function replaceInElement(el) {
-        if (!el) return;
-        // 处理元素自身的 innerHTML（保留子结构）
-        var html = el.innerHTML;
-        var replaced = html.replace(/\$\{(icon\w+)\(\)\}/g, function (match, name) {
-            return iconFns[name] ? iconFns[name]() : match;
-        });
-        if (replaced !== html) {
-            el.innerHTML = replaced;
-            return true;
+    // 仅替换文本节点中的 ${iconXxx()} 字面量，绝不重写父元素 innerHTML，
+    // 避免破坏子 DOM 结构 / 事件绑定 / 动态注入内容，也避免 MutationObserver 风暴导致界面卡死。
+    function replaceTextNode(node) {
+        if (!node || node.nodeType !== 3) return; // 仅处理文本节点
+        var text = node.nodeValue;
+        if (text.indexOf('${') === -1) return;
+        var regex = /\$\{(icon\w+)\(\)\}/g;
+        if (!regex.test(text)) return;
+        regex.lastIndex = 0;
+        var frag = document.createDocumentFragment();
+        var lastIdx = 0;
+        var match;
+        while ((match = regex.exec(text)) !== null) {
+            var fn = iconFns[match[1]];
+            if (!fn) continue; // 函数不存在则保留原字面量
+            if (match.index > lastIdx) {
+                frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+            }
+            var wrapper = document.createElement('span');
+            wrapper.innerHTML = fn();
+            while (wrapper.firstChild) frag.appendChild(wrapper.firstChild);
+            lastIdx = regex.lastIndex;
         }
-        return false;
+        if (lastIdx < text.length) {
+            frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+        }
+        if (frag.childNodes.length) {
+            node.parentNode.replaceChild(frag, node);
+        }
     }
 
-    // 递归遍历 body 下所有元素，替换其中遗留的 ${iconXxx()} 字面量
     function walk(root) {
-        var all = root.querySelectorAll('*');
-        for (var i = 0; i < all.length; i++) {
-            replaceInElement(all[i]);
-        }
-        // 根节点自身（如直接挂在 body 上的文本）
-        replaceInElement(root);
+        if (!root) return;
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+        var nodes = [];
+        var n;
+        while ((n = walker.nextNode())) nodes.push(n);
+        for (var i = 0; i < nodes.length; i++) replaceTextNode(nodes[i]);
     }
 
     function run() {
@@ -4561,14 +4580,10 @@
         }
     }
 
-    // 初次执行 + DOM 变化兜底（覆盖动态插入的节点）
+    // 初次执行 + 文档就绪兜底（静态 HTML 中的图标在此阶段已全部替换完毕）
     run();
     document.addEventListener('DOMContentLoaded', run);
     window.addEventListener('load', run);
-    if (window.MutationObserver) {
-        var mo = new MutationObserver(function () { run(); });
-        mo.observe(document.body, { childList: true, subtree: true });
-    }
 
     // 页面关闭时清理下载定时器，避免内存泄漏
     window.addEventListener('beforeunload', function() {
