@@ -2435,7 +2435,7 @@
                 html += `<tr style="border-bottom:1px solid var(--border);">
                     <td style="padding:6px 8px;" title="${f.path.replace(/"/g,'&quot;')}">${icon} ${f.name}</td>
                     <td style="padding:6px 8px; text-align:right; color:#cf222e; font-weight:600; white-space:nowrap;">${f.size_mb} MB</td>
-                    <td style="padding:6px 8px; text-align:center;"><button class="btn btn-blue" onclick="moveSingleFile('${f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')" style="padding:4px 10px; font-size:12px; border-radius:4px;">搬家</button></td>
+                    <td style="padding:6px 8px; text-align:center;"><button class="btn btn-blue" onclick="moveSingleFile(decodeURIComponent('${encodeURIComponent(f.path)}'))" style="padding:4px 10px; font-size:12px; border-radius:4px;">搬家</button></td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -3541,7 +3541,7 @@
                 <div style="font-size:12px;color:#888;margin-top:4px;">${item.command}</div>
                 <div style="margin-top:4px;">
                     ${actionBtn}
-                    <button onclick="locateFile('${(item.exe_path||'').replace(/\\/g,'\\\\').replace(/'/g,\"\\'\")}')" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">📁 定位文件</button>
+                    <button onclick="locateFile(decodeURIComponent('${encodeURIComponent(item.exe_path || '')}'))" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">📁 定位文件</button>
                     <button onclick="searchOnline('${item.name}')" style="margin-left:4px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">🔍 在线搜索</button>
                 </div>
             </div>`;

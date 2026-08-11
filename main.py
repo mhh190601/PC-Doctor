@@ -26,6 +26,7 @@ import time
 import math
 import random
 import string
+import ssl
 import urllib.request
 import urllib.error
 import logging
@@ -1554,7 +1555,7 @@ APP_VERSION = "1.7.0"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
 # C盘救星下载配置（文件名被 GitHub 截断为 C._v2.0.exe，原名为 C盘救星_v2.0.exe）
-CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/v1.6.0/C._v2.0.exe"
+CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/cdisk-v1.0.0/C._v2.0.exe"
 CDISK_SAVER_FILENAME = "C._v2.0.exe"
 
 # 下载进度（跨线程共享，前端轮询读取）
@@ -1571,12 +1572,18 @@ _download_error = None   # 下载错误信息，None 表示正常
 
 @eel.expose
 def check_network():
-    """检测是否能连接互联网（使用 HTTP 请求，防火墙兼容性更好）"""
+    """检测是否能连接 GitHub（C盘救星下载源），区分'与 GitHub 连接失败'和'证书问题'"""
     try:
-        urllib.request.urlopen('https://www.baidu.com', timeout=2)
-        return True
-    except Exception:
-        return False
+        urllib.request.urlopen('https://github.com', timeout=5)
+        return True, None
+    except urllib.error.URLError as e:
+        # 证书错误：能建立 TCP 但 TLS 握手失败
+        if isinstance(getattr(e, 'reason', None), ssl.SSLError) or \
+           'CERT' in str(getattr(e, 'reason', '')).upper():
+            return False, "与 GitHub 之间连接失败：SSL 证书验证错误，请检查本机根证书或网络代理设置"
+        return False, "与 GitHub 之间连接失败，请检查网络连接"
+    except Exception as e:
+        return False, f"与 GitHub 之间连接失败：{str(e)[:80]}"
 
 
 def get_tools_dir():
@@ -1596,11 +1603,12 @@ def install_cdisksaver():
     """从 GitHub Release 直链下载 C 盘救星，支持实时进度回调"""
     global _download_progress, _download_total, _download_error
 
-    # 1. 网络检测
-    if not check_network():
+    # 1. 连接检测（区分'与 GitHub 连接失败'和'证书问题'）
+    net_ok, net_msg = check_network()
+    if not net_ok:
         with _download_lock:
-            _download_error = "未连接互联网，无法下载"
-        return {"success": False, "offline": True, "message": "未连接互联网，无法下载"}
+            _download_error = net_msg
+        return {"success": False, "offline": True, "message": net_msg}
 
     tools_dir = get_tools_dir()
     target = os.path.join(tools_dir, CDISK_SAVER_FILENAME)
@@ -1641,14 +1649,29 @@ def install_cdisksaver():
             _download_error = None
         print(f"[C盘救星] 下载完成：{downloaded}/{total} 字节", flush=True)
         return {"success": True, "message": "下载完成，C盘救星已安装"}
+    except requests.exceptions.SSLError:
+        error_msg = "与 GitHub 之间连接失败：SSL 证书验证错误，请检查本机根证书或网络代理设置"
+        with _download_lock:
+            _download_error = error_msg
+        return {"success": False, "message": error_msg}
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 404:
+            error_msg = "安装包不存在（404）：GitHub Release 未找到 C盘救星安装文件，请联系开发者确认"
+        else:
+            error_msg = f"下载失败：服务器返回 {response.status_code}"
+        with _download_lock:
+            _download_error = error_msg
+        return {"success": False, "message": error_msg}
     except requests.exceptions.ConnectionError:
+        error_msg = "与 GitHub 之间连接失败，请检查网络连接"
         with _download_lock:
-            _download_error = "网络连接失败，请检查网络"
-        return {"success": False, "message": "网络连接失败，请检查网络"}
+            _download_error = error_msg
+        return {"success": False, "message": error_msg}
     except requests.exceptions.Timeout:
+        error_msg = "下载超时，请稍后重试"
         with _download_lock:
-            _download_error = "下载超时，请稍后重试"
-        return {"success": False, "message": "下载超时，请稍后重试"}
+            _download_error = error_msg
+        return {"success": False, "message": error_msg}
     except Exception as e:
         error_msg = f"下载失败：{str(e)[:100]}"
         with _download_lock:
