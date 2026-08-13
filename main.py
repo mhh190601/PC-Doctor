@@ -691,9 +691,26 @@ def full_system_scan():
         })
     except Exception:
         checks.append({"name": "开机耗时检查", "status": "warning", "desc": "检测失败"})
-    
+
+    # ---------- 8. 安全体检（Windows 安全中心） ----------
+    try:
+        sec = get_security_status()
+        sec_score = sec.get("score", 100)
+        # 安全评分折算进综合体检评分（最高扣 20 分）
+        if sec_score < 100:
+            deduct = max(5, int(round((100 - sec_score) / 100.0 * 20)))
+            score -= deduct
+        for it in sec.get("items", []):
+            name = it.get("name", "安全检查")
+            ok = it.get("status") in ("ok", "enabled", True)
+            status = "ok" if ok else ("error" if it.get("status") in ("error", "disabled", False) else "warning")
+            desc = it.get("desc", "")
+            checks.append({"name": f"安全 · {name}", "status": status, "desc": desc})
+    except Exception:
+        checks.append({"name": "安全体检", "status": "warning", "desc": "检测失败"})
+
     score = max(0, min(100, score))
-    
+
     return {
         "score": score,
         "issues": issues,   # 仅问题列表
@@ -1943,14 +1960,6 @@ def get_c_disk_info():
 
 
 @eel.expose
-def one_click_clean():
-    """一键清理C盘：临时文件 + 磁盘清理"""
-    r1 = clean_temp_files()
-    r2 = run_disk_cleanup()
-    return f"{r1}\n{r2}"
-
-
-@eel.expose
 def pick_folder():
     """弹出文件夹选择对话框，返回选中的文件夹路径"""
     import tkinter.filedialog as fd
@@ -1963,25 +1972,6 @@ def pick_folder():
     if folder:
         return {"folder": folder}
     return {"folder": None}
-
-@eel.expose
-def move_file(source, target_dir):
-    """移动文件到指定目录"""
-    try:
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir, exist_ok=True)
-        filename = os.path.basename(source)
-        dest = os.path.join(target_dir, filename)
-        base, ext = os.path.splitext(filename)
-        counter = 1
-        while os.path.exists(dest):
-            dest = os.path.join(target_dir, f"{base}_{counter}{ext}")
-            counter += 1
-        shutil.move(source, dest)
-        return {"success": True, "message": f"已移动到 {dest}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
 
 @eel.expose
 def get_top_folders(drive="C:\\"):
@@ -2315,193 +2305,6 @@ def get_startup_ranking():
     return results
 
 # ================== 软件卸载助手 ==================
-
-@eel.expose
-def get_installed_software():
-    """获取已安装软件列表，返回名称、版本、大小、卸载命令等"""
-    import winreg
-    software_list = []
-    uninstall_keys = [
-        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-    ]
-    for key_path in uninstall_keys:
-        try:
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_READ)
-            for i in range(0, winreg.QueryInfoKey(key)[0]):
-                try:
-                    subkey_name = winreg.EnumKey(key, i)
-                    subkey = winreg.OpenKey(key, subkey_name)
-                    name = ""
-                    version = ""
-                    publisher = ""
-                    uninstall_string = ""
-                    install_location = ""
-                    size_mb = 0
-                    try:
-                        name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                    except Exception:
-                        continue  # 跳过没有显示名称的项
-                    try:
-                        version = winreg.QueryValueEx(subkey, "DisplayVersion")[0]
-                    except Exception:
-                        pass
-                    try:
-                        publisher = winreg.QueryValueEx(subkey, "Publisher")[0]
-                    except Exception:
-                        pass
-                    try:
-                        uninstall_string = winreg.QueryValueEx(subkey, "UninstallString")[0]
-                    except Exception:
-                        pass
-                    try:
-                        install_location = winreg.QueryValueEx(subkey, "InstallLocation")[0]
-                    except Exception:
-                        pass
-                    try:
-                        # 尝试获取大小（有些软件有 EstimatedSize，单位 KB）
-                        size = winreg.QueryValueEx(subkey, "EstimatedSize")[0]
-                        size_mb = round(int(size) / 1024, 1) if size else 0
-                    except Exception:
-                        pass
-                    # 判断是否为有效的可卸载软件（有卸载命令）
-                    is_valid = bool(uninstall_string)
-                    reg_full_path = f"HKEY_LOCAL_MACHINE\\{key_path}\\{subkey_name}"
-                    
-                    software_list.append({
-                        "name": name,
-                        "version": version,
-                        "publisher": publisher,
-                        "uninstall_string": uninstall_string,
-                        "install_location": install_location,
-                        "size_mb": size_mb,
-                        "is_valid": is_valid,
-                        "reg_key": reg_full_path
-                    })
-                    winreg.CloseKey(subkey)
-                except Exception:
-                    pass
-            winreg.CloseKey(key)
-        except Exception:
-            pass
-    # 按名称排序
-    software_list.sort(key=lambda x: x["name"].lower())
-    return software_list
-
-@eel.expose
-def uninstall_software(uninstall_string, software_name):
-    """执行卸载命令（静默或等待完成），返回卸载是否成功"""
-    try:
-        # 有些卸载命令需要加参数实现静默卸载，这里不做强制，直接执行
-        # 在 Windows 中，通常卸载命令会弹出界面，需要用户交互，我们只能等待
-        process = subprocess.Popen(uninstall_string, shell=True, creationflags=CREATE_NO_WINDOW)
-        process.wait()
-        return {"success": True, "message": f"{software_name} 卸载完成。"}
-    except Exception as e:
-        return {"success": False, "message": f"卸载失败: {str(e)}"}
-
-@eel.expose
-def scan_leftovers(software_name, install_location):
-    """扫描残留文件和注册表项"""
-    leftovers = {"files": [], "reg_keys": []}
-    # 1. 常见残留目录
-    search_paths = []
-    if install_location and os.path.exists(install_location):
-        search_paths.append(install_location)
-    # 尝试从软件名推测 AppData 中的目录
-    appdata_local = os.getenv('LOCALAPPDATA')
-    appdata_roaming = os.getenv('APPDATA')
-    programdata = os.getenv('PROGRAMDATA')
-    # 简单搜索包含软件名的文件夹（浅层搜索，避免耗时）
-    for base in [appdata_local, appdata_roaming, programdata]:
-        if base and os.path.exists(base):
-            try:
-                for item in os.listdir(base):
-                    if software_name.lower() in item.lower():
-                        full_path = os.path.join(base, item)
-                        search_paths.append(full_path)
-            except Exception:
-                pass
-    # 收集残留文件列表（只展示顶层和二级文件，避免太多）
-    for sp in set(search_paths):
-        if os.path.exists(sp):
-            for root, dirs, files in os.walk(sp):
-                for f in files:
-                    leftovers["files"].append(os.path.join(root, f))
-                # 只走两层
-                if root.count(os.sep) - sp.count(os.sep) > 1:
-                    dirs.clear()
-                break  # 只显示目录本身和直接子文件，如需深度扫描可去掉break
-    # 2. 注册表残留扫描
-    reg_paths_to_check = [
-        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
-        r"SOFTWARE",
-        r"SOFTWARE\WOW6432Node",
-    ]
-    for reg_path in reg_paths_to_check:
-        try:
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ)
-            for i in range(winreg.QueryInfoKey(key)[0]):
-                try:
-                    subkey_name = winreg.EnumKey(key, i)
-                    if software_name.lower() in subkey_name.lower():
-                        leftovers["reg_keys"].append(f"HKEY_LOCAL_MACHINE\\{reg_path}\\{subkey_name}")
-                except Exception:
-                    pass
-            winreg.CloseKey(key)
-        except Exception:
-            pass
-    return leftovers
-
-@eel.expose
-def clean_leftovers(files_to_delete, reg_keys_to_delete):
-    """删除指定的残留文件和注册表项"""
-    result = {"files_deleted": 0, "reg_deleted": 0, "errors": []}
-    for f in files_to_delete:
-        try:
-            if os.path.isfile(f):
-                os.remove(f)
-                result["files_deleted"] += 1
-            elif os.path.isdir(f):
-                # 小心删除，只删除空目录或直接删除整个残留目录（用户确认过的）
-                shutil.rmtree(f, ignore_errors=True)
-                result["files_deleted"] += 1
-        except Exception as e:
-            result["errors"].append(f"删除文件失败 {f}: {str(e)}")
-    for reg in reg_keys_to_delete:
-        try:
-            # 解析注册表路径 HKEY_LOCAL_MACHINE\SOFTWARE\...
-            parts = reg.split("\\", 1)
-            if len(parts) == 2 and parts[0] == "HKEY_LOCAL_MACHINE":
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, parts[1], 0, winreg.KEY_ALL_ACCESS)
-                winreg.DeleteKey(key, "")
-                winreg.CloseKey(key)
-                result["reg_deleted"] += 1
-        except Exception as e:
-            result["errors"].append(f"删除注册表失败 {reg}: {str(e)}")
-    return result
-
-@eel.expose
-def delete_software_reg_entry(reg_key):
-    """删除指定软件的注册表卸载条目（用于清理已卸载但残留注册表的软件）"""
-    try:
-        parts = reg_key.split("\\", 1)
-        if len(parts) == 2 and parts[0] == "HKEY_LOCAL_MACHINE":
-            # 打开父键并删除子键
-            parent_path, subkey_name = parts[1].rsplit("\\", 1)
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, parent_path, 0, winreg.KEY_ALL_ACCESS)
-            winreg.DeleteKey(key, subkey_name)
-            winreg.CloseKey(key)
-            return {"success": True, "message": "注册表条目已删除。"}
-        else:
-            return {"success": False, "message": "不支持的注册表路径格式。"}
-    except FileNotFoundError:
-        return {"success": False, "message": "该注册表项已不存在。"}
-    except PermissionError:
-        return {"success": False, "message": "权限不足，请以管理员身份运行。"}
-    except Exception as e:
-        return {"success": False, "message": f"删除失败: {str(e)}"}
 
 # ================== 重复文件查找 ==================
 
@@ -2872,32 +2675,6 @@ def get_security_status():
     status["overall_score"] = score
 
     return status
-
-@eel.expose
-def launch_defender_scan(scan_type: str = "quick"):
-    """启动 Windows Defender 扫描（quick/full/custom）并以低权限窗口通知用户"""
-    try:
-        if scan_type == "full":
-            subprocess.Popen(
-                ['powershell', '-Command', 'Start-MpScan -ScanType FullScan'],
-                creationflags=CREATE_NO_WINDOW
-            )
-            return {"success": True, "message": "已启动完整扫描，请稍后查看结果。"}
-        else:
-            os.startfile("windowsdefender://threat")
-            return {"success": True, "message": "已打开 Windows 安全中心。"}
-    except Exception as e:
-        return {"success": False, "message": f"启动失败：{str(e)[:100]}"}
-
-@eel.expose
-def open_windows_security():
-    """打开 Windows 安全中心"""
-    try:
-        os.startfile("windowsdefender://")
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "message": str(e)[:100]}
-
 
 # ================== 启动 ==================
 import atexit
