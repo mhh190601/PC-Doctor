@@ -2616,11 +2616,18 @@
         }
     }
 
+    let _isSending = false;  // 防止回复未完成时重复发送
     async function sendDiagnosis() {
         switchPanel('chat');
         const input = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
         const question = input.value.trim();
         if (!question) return;
+        if (_isSending) return;  // 上一条回复未完成，直接忽略
+        _isSending = true;
+        input.disabled = true;
+        if (sendBtn) sendBtn.disabled = true;
+        input.placeholder = '正在思考，请稍候…';
         addChatMessage(question, 'user');
         input.value = '';
         currentUserQuestion = question;
@@ -2739,6 +2746,13 @@
                 addChatMessage(result.message, 'ai');
             }
         } catch (error) { addChatMessage(`诊断失败：${error.message || error}`, 'ai'); }
+        finally {
+            _isSending = false;
+            input.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+            input.placeholder = '描述您的问题，例如：电脑开机慢、蓝屏、弹出广告…';
+            input.focus();
+        }
     }
 
     async function submitFeedback(kId, helpful, q) {

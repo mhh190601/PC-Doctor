@@ -1454,7 +1454,14 @@ def format_answer(raw: dict) -> dict:
         source_label = "自研模型 · 本地"
         source_badge = "local"
 
+    # 清洗答案：去掉可能混入的 HTML 标签，避免前端显示原始网页源码
+    import re as _re
+    raw_answer = raw.get("answer", "")
+    if isinstance(raw_answer, str):
+        raw_answer = _re.sub(r"<[^>]+>", " ", raw_answer)
+        raw_answer = _re.sub(r"\s+", " ", raw_answer).strip()
     out = dict(raw)
+    out["answer"] = raw_answer
     out.update({
         "source_type": source_type,
         "source_label": source_label,
