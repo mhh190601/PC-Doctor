@@ -1555,6 +1555,59 @@ class AIEngine:
             logger.error(f"加载错误码表失败: {e}")
             return {}
 
+    def _ensure_json_semantic(self) -> bool:
+        """
+        确保语义索引已从 knowledge_base.json 构建完成。
+        模型懒加载（首次查询才触发），向量缓存 knowledge_vectors.npy。
+        """
+        if getattr(self, "_json_semantic_ready", False):
+            return True
+        try:
+            kb_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base.json")
+            if not os.path.exists(kb_path):
+                logger.warning("knowledge_base.json 不存在，无法构建语义索引")
+                return False
+            with open(kb_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not data:
+                logger.warning("knowledge_base.json 为空")
+                return False
+            rows = [(idx, d.get("question", ""), d.get("answer", ""),
+                     1.0, d.get("source", ""), d.get("tags", ""), d.get("severity", "中"))
+                    for idx, d in enumerate(data, 1)]
+            # 复用现有语义检索器：懒加载模型 + 向量缓存 knowledge_vectors.npy
+            ok = self.semantic.build_index(rows)
+            self._json_semantic_ready = ok
+            return ok
+        except Exception as e:
+            logger.error(f"构建 JSON 语义索引失败: {e}")
+            return False
+
+    def search(self, query: str):
+        """
+        语义检索入口（第一阶段优化）
+
+        从 knowledge_base.json 加载知识，使用 SentenceTransformer 做语义匹配；
+        模型懒加载（首次查询才初始化），向量缓存 knowledge_vectors.npy。
+
+        返回:
+            (answer: str, score: float)  命中时
+            None                          无结果或语义检索不可用时
+        """
+        if not query or not query.strip():
+            return None
+        try:
+            if not self._ensure_json_semantic():
+                return None
+            results = self.semantic.search(query, top_k=1)
+            if not results:
+                return None
+            best = results[0]
+            return (best.get("answer", ""), float(best.get("score", 0.0)))
+        except Exception as e:
+            logger.error(f"语义检索失败: {e}")
+            return None
+
     def _exact_match(self, question: str) -> Optional[dict]:
         """精确匹配：错误码、已知指令等"""
         import re
@@ -1990,6 +2043,14 @@ def get_engine() -> AIEngine:
             if _engine is None:
                 _engine = AIEngine()
     return _engine
+
+
+def search(query: str):
+    """模块级语义检索便捷函数（第一阶段优化）。
+
+    返回 (answer, score) 或 None。详见 AIEngine.search。
+    """
+    return get_engine().search(query)
 
 
 def ask(question: str, mode: str = "auto") -> dict:

@@ -433,7 +433,51 @@ def run_all_optimizations():
 @eel.expose
 def ai_diagnose(problem_description, mode="auto"):
     """智能诊断：使用 AI 引擎多层匹配（支持模式切换：auto/local/cloud/search）"""
-    from ai_engine import get_engine, format_answer
+    from ai_engine import get_engine, format_answer, search as ai_search
+
+    # 第一阶段优化：优先语义检索（knowledge_base.json + SentenceTransformer，
+    # 模型懒加载、向量缓存 knowledge_vectors.npy）
+    semantic = ai_search(problem_description)
+    if semantic is not None:
+        answer, score = semantic
+        if score >= 0.5:  # 中/高置信度直接采用
+            result = format_answer({
+                "success": True,
+                "answer": answer,
+                "layer": "semantic_search",
+                "type": "semantic",
+                "score": score,
+                "confidence": "high" if score >= 0.85 else "medium",
+                "source": "电脑医生知识库（语义检索）",
+                "tags": "",
+                "severity": "中",
+                "knowledge_id": None,
+                "layer_label": "语义检索",
+            })
+            return _pack_ai_result(result)
+
+    # 回退 1：原自学习匹配
+    try:
+        match = learning.match_best_answer(problem_description)
+        if match and match.get("answer"):
+            result = format_answer({
+                "success": True,
+                "answer": match["answer"],
+                "layer": "learning_fallback",
+                "type": "learning",
+                "score": float(match.get("score", 0.0)),
+                "confidence": match.get("confidence", "medium"),
+                "source": match.get("source", "电脑医生知识库"),
+                "tags": match.get("tags", ""),
+                "severity": match.get("severity", "中"),
+                "knowledge_id": match.get("id"),
+                "layer_label": "自学习匹配",
+            })
+            return _pack_ai_result(result)
+    except Exception as e:
+        logger.error(f"自学习回退失败: {e}")
+
+    # 回退 2：原多层引擎
     engine = get_engine()
     result = engine.ask(problem_description, mode=mode)
 

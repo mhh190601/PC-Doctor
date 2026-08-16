@@ -550,7 +550,7 @@
             margin-right: 4px;
             user-select: none;
         }
-        .ai-mode-selector .mode-btn {
+        .ai-mode-selector .mode-select {
             padding: 4px 12px;
             border-radius: 14px;
             border: 1px solid var(--border);
@@ -561,14 +561,13 @@
             transition: all 0.2s;
             white-space: nowrap;
         }
-        .ai-mode-selector .mode-btn:hover {
-            border-color: #0550ae;
-            color: #58a6ff;
+        .ai-mode-selector .mode-select:hover {
+            border-color: var(--primary);
+            color: var(--primary);
         }
-        .ai-mode-selector .mode-btn.active {
-            background: #0550ae;
-            color: #fff;
-            border-color: #0550ae;
+        .ai-mode-selector .mode-select:focus {
+            outline: none;
+            border-color: var(--primary);
             box-shadow: 0 0 8px rgba(5,80,174,0.3);
         }
         .ai-mode-selector .mode-btn-secondary {
@@ -1757,10 +1756,12 @@
                     <div class="chat-input">
                         <div class="ai-mode-selector">
                             <span class="mode-label">AI 模式</span>
-                            <button class="mode-btn active" data-mode="auto" title="自研优先，云端兜底，自动选择最佳方案">⚡ 智能</button>
-                            <button class="mode-btn" data-mode="local" title="纯自研AI，完全离线，速度最快">🧪 自研</button>
-                            <button class="mode-btn" data-mode="cloud" title="云端大模型 · 自动联网增强">☁️ 云端</button>
-                            <button class="mode-btn mode-btn-secondary" data-mode="search" title="仅网络搜索，不使用AI生成">🔍 搜索</button>
+                            <select id="aiModeSelect" class="mode-select" title="选择 AI 回答模式">
+                                <option value="auto">⚡ 智能自动</option>
+                                <option value="local">🧪 本地测试</option>
+                                <option value="cloud">☁️ 云端联网</option>
+                                <option value="search">🔍 仅搜索</option>
+                            </select>
                         </div>
                         <input type="text" id="userInput" placeholder="描述你的电脑问题，例如：电脑卡顿怎么办？" onkeydown="if(event.key==='Enter')sendDiagnosis()">
                         <button onclick="sendDiagnosis()">
@@ -2523,24 +2524,27 @@
     let currentAIMode = 'auto';
     
     function initAIModeSelector() {
-        const container = document.querySelector('.ai-mode-selector');
-        if (!container) return;
-        container.addEventListener('click', function(e) {
-            const btn = e.target.closest('.mode-btn');
-            if (!btn) return;
-            container.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentAIMode = btn.dataset.mode;
-            // 更新输入框 placeholder 提示
-            const hints = {
-                'auto': '智能模式：自研优先，云端兜底，自动选择最佳回答',
-                'local': '自研模式：纯本地AI，完全离线，速度最快',
-                'cloud': '云端模式：调用在线大模型深度回答 · 自动联网',
-                'search': '搜索模式：实时网络搜索，不调用AI生成'
-            };
-            const input = document.getElementById('userInput');
-            if (input) input.placeholder = hints[currentAIMode] || hints['auto'];
+        const sel = document.getElementById('aiModeSelect');
+        if (!sel) return;
+        setAIMode(currentAIMode);
+        sel.addEventListener('change', function(e) {
+            setAIMode(e.target.value);
         });
+    }
+
+    function setAIMode(mode) {
+        currentAIMode = mode;
+        const sel = document.getElementById('aiModeSelect');
+        if (sel) sel.value = mode;
+        // 更新输入框 placeholder 提示
+        const hints = {
+            'auto': '智能模式：自研优先，云端兜底，自动选择最佳回答',
+            'local': '自研模式：纯本地AI，完全离线，速度最快',
+            'cloud': '云端模式：调用在线大模型深度回答 · 自动联网',
+            'search': '搜索模式：实时网络搜索，不调用AI生成'
+        };
+        const input = document.getElementById('userInput');
+        if (input) input.placeholder = hints[mode] || hints['auto'];
     }
 
     // ========== 智能问答（在聊天面板） ==========
