@@ -1,6 +1,5 @@
 import tkinter as tk
 import psutil
-import threading
 import time
 
 class SpeedMonitor:

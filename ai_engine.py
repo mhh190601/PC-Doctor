@@ -25,7 +25,7 @@ import shutil
 import sqlite3
 import threading
 import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 # ============================================================
@@ -444,7 +444,6 @@ class SemanticRetriever:
         # 语义层：用权重调节向量内积（权重越大越靠前）
         # 通过缩放归一化后的向量实现，无需重算 embedding
         try:
-            import numpy as np
             idx = self.documents.index(target)
             if self.embeddings is not None and idx < len(self.embeddings):
                 base = self._base_vectors[idx] if hasattr(self, "_base_vectors") else self.embeddings[idx].copy()
@@ -858,8 +857,6 @@ class CloudAPI:
             return None
 
         try:
-            import requests
-
             system_prompt = (
                 "你是一位拥有20年实战经验的电脑维修专家，曾帮助成千上万用户解决过各类Windows系统故障。"
                 "你的回答必须满足以下要求：\n"
@@ -1017,6 +1014,7 @@ class WebSearcher:
             logger.info(f"搜索缓存命中: {query[:30]}...")
             return self._cache[cache_key]
         try:
+            import requests
             headers = {"Ocp-Apim-Subscription-Key": self.api_key}
             params = {"q": query, "mkt": "zh-CN", "count": count, "textFormat": "Raw"}
             resp = requests.get(self.endpoint, headers=headers, params=params, timeout=10)
@@ -1117,7 +1115,7 @@ class KnowledgeBridge:
                  "source": r[4], "tags": r[5], "severity": r[6]}
                 for r in rows
             ]
-        except Exception as e:
+        except Exception:
             # 兼容旧表（无 tags/severity 字段）
             try:
                 conn = sqlite3.connect(KnowledgeBridge.DB_PATH)
@@ -1340,7 +1338,6 @@ class KnowledgeBridge:
             conn = sqlite3.connect(KnowledgeBridge.DB_PATH)
             cur = conn.cursor()
             kid = doc.get("id")
-            title = doc.get("title", "")
             question = doc.get("question", "")
             answer = doc.get("answer", "")
             source = doc.get("source", "manual")

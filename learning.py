@@ -5,8 +5,6 @@
 import sqlite3
 import os
 import sys
-import re
-import json
 import logging
 
 logger = logging.getLogger('pc_doctor')
@@ -149,7 +147,6 @@ def refresh_cache():
 
 def match_best_answer(user_question):
     """优化匹配：引入核心关键词加权，精准定位用户意图"""
-    global knowledge_cache, vectorizer, tfidf_matrix
     if not knowledge_cache:
         refresh_cache()
     if not knowledge_cache or not vectorizer:

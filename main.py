@@ -20,10 +20,10 @@ import threading
 import psutil
 import hashlib
 import re
+import winreg
 import requests
 import webbrowser
 import time
-import math
 import random
 import string
 import ssl
@@ -35,7 +35,6 @@ from ctypes import windll, wintypes
 import learning  # 导入自学习模块
 
 logger = logging.getLogger('pc_doctor')
-from PIL import Image, ImageTk
 import stat
 
 # PyInstaller 打包兼容：确保临时解压目录在路径中
@@ -1081,7 +1080,7 @@ def network_speed_test():
         start = time.time()
         req = urllib.request.Request(upload_url, data=upload_data, method='POST')
         with urllib.request.urlopen(req, timeout=15) as f:
-            resp = f.read()
+            f.read()
         elapsed = time.time() - start
         size_mb = len(upload_data) / (1024 * 1024)
         speed_mbps = (size_mb * 8) / elapsed
@@ -1715,7 +1714,7 @@ def install_cdisksaver():
         with _download_lock:
             _download_error = error_msg
         return {"success": False, "message": error_msg}
-    except requests.exceptions.HTTPError as e:
+    except requests.exceptions.HTTPError:
         if response.status_code == 404:
             error_msg = "安装包不存在（404）：GitHub Release 未找到 C盘救星安装文件，请联系开发者确认"
         else:
@@ -2182,11 +2181,10 @@ def scan_directory_tree(root_path="C:\\", max_depth=3, top_n=20):
 
 # ================== 系统信息概览 ==================
 import platform
-import subprocess
 
 @eel.expose
 def get_system_info():
-    import subprocess, re
+    import subprocess
     info = {}
     info['os'] = f"{platform.system()} {platform.release()} ({platform.version()})"
     info['hostname'] = platform.node()
@@ -2755,10 +2753,7 @@ def show_splash(duration=2800):
     logo_center_x = win_w // 2                   # 水平居中
     logo_center_y = win_h // 2 - 35              # 垂直偏上，为下方文字留空间
     # Logo 包围盒：用于粒子环绕
-    logo_top = logo_center_y - logo_size // 2
     logo_bottom = logo_center_y + logo_size // 2
-    logo_left = logo_center_x - logo_size // 2
-    logo_right = logo_center_x + logo_size // 2
     # 文字位置：紧贴 Logo 下方
     text_y_main = logo_bottom + 28               # "电脑医生"
     text_y_sub = text_y_main + 38                # "PC Doctor"

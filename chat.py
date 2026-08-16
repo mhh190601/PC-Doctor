@@ -4,7 +4,7 @@
 用法: python chat.py
 输入问题即可测试，输入 quit 退出
 """
-import sys, os, io, json, time
+import sys, os, io, time
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
