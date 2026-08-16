@@ -212,13 +212,13 @@ class SemanticRetriever:
 
             # 1. 尝试 ONNX Runtime 推理（速度提升2-3倍，内存减少40%）
             try:
-                from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel
+                from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel  # pyright: ignore[reportMissingImports]
                 onnx_path = os.path.join(cache, "semantic_model.onnx")
                 # 若 ONNX 文件不存在，先导出一份
                 if not os.path.exists(onnx_path):
                     logger.info("首次使用 ONNX，正在导出模型（约需1分钟）...")
                     try:
-                        from optimum.onnxruntime import ORTModelForFeatureExtraction
+                        from optimum.onnxruntime import ORTModelForFeatureExtraction  # pyright: ignore[reportMissingImports]
                         ort_model = ORTModelForFeatureExtraction.from_pretrained(
                             name, cache_dir=cache, export=True, provider="CPUExecutionProvider"
                         )
