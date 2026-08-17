@@ -1656,9 +1656,40 @@ def add_hosts_entry(ip, domain):
 APP_VERSION = "1.7.0"
 GITHUB_REPO = "mhh190601/PC-Doctor"
 
-# C盘救星下载配置（文件名被 GitHub 截断为 C._v2.0.exe，原名为 C盘救星_v2.0.exe）
-CDISK_SAVER_URL = "https://github.com/mhh190601/PC-Doctor/releases/download/cdisk-v1.0.0/C._v2.0.exe"
-CDISK_SAVER_FILENAME = "C._v2.0.exe"
+# 子工具下载配置（文件名被 GitHub 截断，原名为 中文名_vX.X.exe）
+# download_url 默认指向 GitHub Release；若本地仓库内置了 dist 资源，则优先从内置资源提取（离线可用）
+GITHUB_RELEASE_BASE = "https://github.com/mhh190601/PC-Doctor/releases/download"
+
+# 子工具注册表：name 为内部键，展示名在软件中心前端定义
+SUBTOOLS = {
+    "cdisksaver": {
+        "filename": "C._v2.0.exe",          # 已被 GitHub 截断后的文件名
+        "release_tag": "cdisk-v1.0.0",
+        "release_file": "C._v2.0.exe",
+        "desc": "C盘救星 - 磁盘清理与空间分析",
+    },
+    "privacy_cleaner": {
+        "filename": "隐私清理.exe",
+        "release_tag": "tools-v1.0.0",
+        "release_file": "隐私清理.exe",
+        "desc": "隐私清理 - 清理浏览器缓存与历史记录",
+    },
+    "startup_manager": {
+        "filename": "启动项管理.exe",
+        "release_tag": "tools-v1.0.0",
+        "release_file": "启动项管理.exe",
+        "desc": "启动项管理 - 管理开机自启动程序",
+    },
+    "file_shredder": {
+        "filename": "文件粉碎机.exe",
+        "release_tag": "tools-v1.0.0",
+        "release_file": "文件粉碎机.exe",
+        "desc": "文件粉碎机 - 彻底删除文件不可恢复",
+    },
+}
+
+# 内置 dist 资源目录（与 main.py 同级的 tools/dist），离线安装用
+_BUILTIN_DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools", "dist")
 
 # 下载进度（跨线程共享，前端轮询读取）
 import threading
@@ -1666,15 +1697,16 @@ _download_lock = threading.Lock()
 _download_progress = 0
 _download_total = 0
 _download_error = None   # 下载错误信息，None 表示正常
+_download_current = ""   # 当前正在下载的子工具键
 
 
 # ============================================================
-# 子程序管理（C盘救星 直链下载版）
+# 子程序管理（通用下载安装，复用 C盘救星 直链下载框架）
 # ============================================================
 
 @eel.expose
 def check_network():
-    """检测是否能连接 GitHub（C盘救星下载源），区分'与 GitHub 连接失败'和'证书问题'"""
+    """检测是否能连接 GitHub（子工具下载源），区分'与 GitHub 连接失败'和'证书问题'"""
     try:
         urllib.request.urlopen('https://github.com', timeout=5)
         return True, None
@@ -1693,50 +1725,100 @@ def get_tools_dir():
     return os.path.join(os.getenv('APPDATA'), '电脑医生', 'tools')
 
 
-@eel.expose
-def is_cdisksaver_installed():
-    """检查目标路径是否存在C盘救星"""
-    target = os.path.join(get_tools_dir(), CDISK_SAVER_FILENAME)
-    return os.path.exists(target)
+def _subtool_target(subkey):
+    """返回某子工具在用户工具目录中的目标路径"""
+    cfg = SUBTOOLS[subkey]
+    return os.path.join(get_tools_dir(), cfg["filename"])
+
+
+def _builtin_dist_path(subkey):
+    """若仓库内置了 dist 资源则返回路径，否则 None"""
+    cfg = SUBTOOLS[subkey]
+    p = os.path.join(_BUILTIN_DIST_DIR, cfg["filename"])
+    return p if os.path.exists(p) else None
 
 
 @eel.expose
-def install_cdisksaver():
-    """从 GitHub Release 直链下载 C 盘救星，支持实时进度回调"""
-    global _download_progress, _download_total, _download_error
+def is_subtool_installed(subkey):
+    """检查某子工具是否已安装（通用）"""
+    if subkey not in SUBTOOLS:
+        return False
+    return os.path.exists(_subtool_target(subkey))
 
-    # 1. 连接检测（区分'与 GitHub 连接失败'和'证书问题'）
-    net_ok, net_msg = check_network()
-    if not net_ok:
-        with _download_lock:
-            _download_error = net_msg
-        return {"success": False, "offline": True, "message": net_msg}
 
-    tools_dir = get_tools_dir()
-    target = os.path.join(tools_dir, CDISK_SAVER_FILENAME)
+@eel.expose
+def list_subtools_status():
+    """返回所有子工具的安装状态，供前端初始化卡片"""
+    return {k: os.path.exists(_subtool_target(k)) for k in SUBTOOLS}
 
+
+def _install_from_builtin(subkey):
+    """从内置 dist 资源复制到用户工具目录（离线安装），返回 (success, message)"""
+    src = _builtin_dist_path(subkey)
+    if not src:
+        return False, "未找到内置安装包（开发模式需先执行 tools/build_subtools.py 打包）"
+    target = _subtool_target(subkey)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    shutil.copy2(src, target)
+    return True, f"已从本地资源安装 {SUBTOOLS[subkey]['filename']}"
+
+
+@eel.expose
+def install_subtool(subkey):
+    """通用子工具安装：优先内置 dist，否则从 GitHub Release 下载（含实时进度回调）"""
+    global _download_progress, _download_total, _download_error, _download_current
+
+    if subkey not in SUBTOOLS:
+        return {"success": False, "message": f"未知子工具：{subkey}"}
+
+    # 1. 若已安装，直接返回
+    target = _subtool_target(subkey)
     if os.path.exists(target):
         with _download_lock:
             _download_error = None
         return {"success": True, "message": "已安装，可直接打开"}
 
+    # 2. 优先使用内置 dist 资源（离线可用，验收友好）
+    builtin = _builtin_dist_path(subkey)
+    if builtin:
+        try:
+            ok, msg = _install_from_builtin(subkey)
+            with _download_lock:
+                _download_progress = os.path.getsize(builtin)
+                _download_total = os.path.getsize(builtin)
+                _download_error = None
+                _download_current = subkey
+            return {"success": ok, "message": msg, "local": True}
+        except Exception as e:
+            return {"success": False, "message": f"本地安装失败：{str(e)[:100]}"}
+
+    # 3. 否则从 GitHub Release 直链下载
+    cfg = SUBTOOLS[subkey]
+    url = f"{GITHUB_RELEASE_BASE}/{cfg['release_tag']}/{cfg['release_file']}"
+
+    net_ok, net_msg = check_network()
+    if not net_ok:
+        with _download_lock:
+            _download_error = net_msg
+            _download_current = subkey
+        return {"success": False, "offline": True, "message": net_msg}
+
+    tools_dir = get_tools_dir()
     os.makedirs(tools_dir, exist_ok=True)
 
-    # 重置进度和错误
     with _download_lock:
         _download_progress = 0
         _download_total = 0
         _download_error = None
+        _download_current = subkey
 
     try:
-        # 2. 流式下载（支持进度跟踪）
-        response = requests.get(CDISK_SAVER_URL, stream=True, timeout=30)
+        response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         with _download_lock:
             _download_total = int(response.headers.get('content-length', 0))
             _download_progress = 0
 
-        # 写入临时文件，完成后原子替换
         temp_file = target + '.tmp'
         with open(temp_file, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
@@ -1749,8 +1831,8 @@ def install_cdisksaver():
             downloaded = _download_progress
             total = _download_total
             _download_error = None
-        print(f"[C盘救星] 下载完成：{downloaded}/{total} 字节", flush=True)
-        return {"success": True, "message": "下载完成，C盘救星已安装"}
+        print(f"[子工具] {subkey} 下载完成：{downloaded}/{total} 字节", flush=True)
+        return {"success": True, "message": f"下载完成，{cfg['filename']} 已安装"}
     except requests.exceptions.SSLError:
         error_msg = "与 GitHub 之间连接失败：SSL 证书验证错误，请检查本机根证书或网络代理设置"
         with _download_lock:
@@ -1758,7 +1840,7 @@ def install_cdisksaver():
         return {"success": False, "message": error_msg}
     except requests.exceptions.HTTPError:
         if response.status_code == 404:
-            error_msg = "安装包不存在（404）：GitHub Release 未找到 C盘救星安装文件，请联系开发者确认"
+            error_msg = f"安装包不存在（404）：GitHub Release 未找到 {cfg['filename']}，请联系开发者确认"
         else:
             error_msg = f"下载失败：服务器返回 {response.status_code}"
         with _download_lock:
@@ -1778,7 +1860,6 @@ def install_cdisksaver():
         error_msg = f"下载失败：{str(e)[:100]}"
         with _download_lock:
             _download_error = error_msg
-        # 清理残留文件
         for f in [target, target + '.tmp']:
             if os.path.exists(f):
                 try:
@@ -1790,58 +1871,70 @@ def install_cdisksaver():
 
 @eel.expose
 def get_download_progress():
-    """返回当前下载进度（前端轮询调用），含错误状态"""
+    """返回当前下载进度（前端轮询调用），含错误状态与当前子工具键"""
     with _download_lock:
         downloaded = _download_progress
         total = _download_total
         error = _download_error
+        current = _download_current
     if error:
-        return {"percent": 0, "downloaded": 0, "total": 0, "error": True, "message": error}
+        return {"percent": 0, "downloaded": 0, "total": 0, "error": True, "message": error, "subkey": current}
     if total > 0:
         percent = round((downloaded / total) * 100, 1)
-        return {"percent": percent, "downloaded": downloaded, "total": total, "error": False}
-    return {"percent": 0, "downloaded": 0, "total": 0, "error": False}
+        return {"percent": percent, "downloaded": downloaded, "total": total, "error": False, "subkey": current}
+    return {"percent": 0, "downloaded": 0, "total": 0, "error": False, "subkey": current}
+
+
+@eel.expose
+def launch_subtool(subkey):
+    """通用子工具启动：查找用户工具目录中的 exe 并打开"""
+    if subkey not in SUBTOOLS:
+        return {"success": False, "message": f"未知子工具：{subkey}"}
+    target = _subtool_target(subkey)
+    print(f"[子工具] {subkey} 目标: {target}", flush=True)
+    print(f"[子工具] {subkey} 存在: {os.path.exists(target)}", flush=True)
+    if not os.path.exists(target):
+        return {"success": False, "message": "子工具未安装，请先下载"}
+
+    # 方法1: os.startfile（Windows原生，最可靠）
+    try:
+        os.startfile(target)
+        return {"success": True, "message": f"{SUBTOOLS[subkey]['filename']} 已启动"}
+    except Exception as e:
+        print(f"[子工具] {subkey} os.startfile 失败: {e}", flush=True)
+    # 方法2: subprocess.Popen（不带 shell，list 方式）
+    try:
+        subprocess.Popen([target], cwd=os.path.dirname(target))
+        return {"success": True, "message": f"{SUBTOOLS[subkey]['filename']} 已启动"}
+    except Exception as e2:
+        print(f"[子工具] {subkey} Popen(list) 失败: {e2}", flush=True)
+    # 方法3: subprocess.Popen（带 shell）
+    try:
+        subprocess.Popen(f'"{target}"', shell=True, cwd=os.path.dirname(target))
+        return {"success": True, "message": f"{SUBTOOLS[subkey]['filename']} 已启动"}
+    except Exception as e3:
+        print(f"[子工具] {subkey} Popen(shell) 失败: {e3}", flush=True)
+        return {"success": False, "message": f"启动失败：{e3}"}
+
+
+# ========== 以下为 C盘救星 兼容别名（委托给通用实现）==========
+
+@eel.expose
+def is_cdisksaver_installed():
+    """[兼容] 检查 C盘救星 是否安装"""
+    return is_subtool_installed("cdisksaver")
+
+
+@eel.expose
+def install_cdisksaver():
+    """[兼容] 安装 C盘救星"""
+    return install_subtool("cdisksaver")
 
 
 @eel.expose
 def launch_cdisksaver():
-    """启动C盘救星"""
-    target = os.path.join(get_tools_dir(), CDISK_SAVER_FILENAME)
-    print(f"[C盘救星] 目标: {target}", flush=True)
-    print(f"[C盘救星] 存在: {os.path.exists(target)}", flush=True)
-    print(f"[C盘救星] 大小: {os.path.getsize(target) if os.path.exists(target) else 'N/A'}", flush=True)
-
-    if not os.path.exists(target):
-        print(f"[C盘救星] 文件不存在！", flush=True)
-        return {"success": False, "message": "C盘救星未安装，请先下载"}
-
-    # 方法1: os.startfile（Windows原生，最可靠）
-    try:
-        print(f"[C盘救星] 尝试 os.startfile...", flush=True)
-        os.startfile(target)
-        print(f"[C盘救星] os.startfile 成功！", flush=True)
-        return {"success": True, "message": "C盘救星已启动"}
-    except Exception as e:
-        print(f"[C盘救星] os.startfile 失败: {e}", flush=True)
-
-    # 方法2: subprocess.Popen（不带 shell，list 方式）
-    try:
-        print(f"[C盘救星] 尝试 Popen(list)...", flush=True)
-        subprocess.Popen([target], cwd=os.path.dirname(target))
-        print(f"[C盘救星] Popen(list) 成功！", flush=True)
-        return {"success": True, "message": "C盘救星已启动"}
-    except Exception as e2:
-        print(f"[C盘救星] Popen(list) 失败: {e2}", flush=True)
-
-    # 方法3: subprocess.Popen（带 shell）
-    try:
-        print(f"[C盘救星] 尝试 Popen(shell)...", flush=True)
-        subprocess.Popen(f'"{target}"', shell=True, cwd=os.path.dirname(target))
-        print(f"[C盘救星] Popen(shell) 成功！", flush=True)
-        return {"success": True, "message": "C盘救星已启动"}
-    except Exception as e3:
-        print(f"[C盘救星] 所有方法均失败: {e3}", flush=True)
-        return {"success": False, "message": f"启动失败：{e3}"}
+    """[兼容] 启动 C盘救星"""
+    return launch_subtool("cdisksaver")
 
 
 @eel.expose
@@ -2657,108 +2750,176 @@ def _run_ps(command: str, timeout: int = 8) -> str:
 
 @eel.expose
 def get_security_status():
-    """获取 Windows 安全中心各项防护状态（纯读取，零风险）"""
-    status = {
-        "defender_enabled": False,
-        "av_version": "未知",
-        "av_updated": "未知",
-        "last_quick_scan": "从未扫描",
-        "threats_found": 0,
-        "firewall_on": False,
-        "smartscreen_on": False,
-        "memory_integrity": False,
-        "secure_boot": False,
-        "real_time_protection": False,
-        "overall_score": 0,  # 0-5 安全评分
+    """获取 Windows 安全中心各项防护状态（纯读取，零风险）
+
+    返回前端 renderSecurityStatus 期望的结构化格式：
+    每项含 status(ok|warn|bad|unknown) 与 detail(描述文本)。
+    检测失败（非 Windows / 无权限 / 超时）时该项为 unknown + "无法检测"，
+    整体 offline=True，对应验收"离线时显示无法检测"。
+    """
+    def _item(status, detail):
+        return {"status": status, "detail": detail}
+
+    result = {
+        "defender": _item("unknown", "无法检测"),
+        "firewall": _item("unknown", "无法检测"),
+        "smartscreen": _item("unknown", "无法检测"),
+        "memory_integrity": _item("unknown", "无法检测"),
+        "secure_boot": _item("unknown", "无法检测"),
+        "threats": _item("unknown", "无法检测"),
+        "overall_score": 0,   # 0-5
+        "offline": False,
     }
 
+    # 非 Windows 平台直接返回"无法检测"
+    if os.name != "nt":
+        result["offline"] = True
+        return result
+
+    # -- Defender / 实时保护 / 病毒库 / 上次扫描 --
     try:
-        # -- Defender 状态（Get-MpComputerStatus）--
         raw = _run_ps(
             '$s=Get-MpComputerStatus -ErrorAction SilentlyContinue;'
-            'Write-Host $s.AntispywareEnabled;'
+            'Write-Host $s.AntivirusEnabled;'
+            'Write-Host $s.RealTimeProtectionEnabled;'
             'Write-Host $s.AntispywareSignatureVersion;'
             'Write-Host $s.AntispywareSignatureLastUpdated;'
-            'Write-Host $s.QuickScanEndTime;'
-            'Write-Host $s.RealTimeProtectionEnabled'
+            'Write-Host $s.QuickScanEndTime'
         )
         lines = [l.strip() for l in raw.split('\n') if l.strip()]
-        if len(lines) >= 1:
-            status["defender_enabled"] = lines[0].lower() == "true"
-        if len(lines) >= 2:
-            status["av_version"] = lines[1]
-        if len(lines) >= 3:
-            status["av_updated"] = lines[2]
-        if len(lines) >= 4 and lines[3]:
-            try:
-                dt = lines[3]
-                status["last_quick_scan"] = dt.split(' ')[0] if ' ' in dt else dt[:10]
-            except Exception:
-                status["last_quick_scan"] = lines[3][:19]
         if len(lines) >= 5:
-            status["real_time_protection"] = lines[4].lower() == "true"
+            av_on = lines[0].lower() == "true"
+            rtp = lines[1].lower() == "true"
+            ver = lines[2]
+            updated = lines[3]
+            quick = lines[4]
+            if av_on and rtp:
+                dstatus = "ok"
+            elif av_on or rtp:
+                dstatus = "warn"
+            else:
+                dstatus = "bad"
+            parts = []
+            if ver:
+                parts.append(f"病毒库版本 {ver}")
+            if updated and not updated.lower().startswith("1/1/0001"):
+                parts.append(f"更新于 {updated.split(' ')[0]}")
+            if quick and not quick.lower().startswith("1/1/0001"):
+                parts.append(f"上次扫描 {quick.split(' ')[0]}")
+            elif not quick or quick.lower().startswith("1/1/0001"):
+                parts.append("尚未扫描")
+            result["defender"] = _item(dstatus, " | ".join(parts) if parts else "实时防病毒状态未知")
     except Exception:
         pass
 
+    # -- 防火墙 --
     try:
-        # -- 防火墙状态（Get-NetFirewallProfile）--
         fw = _run_ps(
             '$p=Get-NetFirewallProfile -ErrorAction SilentlyContinue;'
-            '($p | ForEach-Object {$_.Enabled}) -join ","'
+            '(($p|ForEach-Object{$_.Enabled}) -join ",")'
         )
-        status["firewall_on"] = "True" in fw
+        on = "True" in fw
+        result["firewall"] = _item("ok" if on else "bad",
+                                   "防火墙已开启（域/专用/公用）" if on else "防火墙未完全开启")
     except Exception:
         pass
 
+    # -- SmartScreen --
     try:
-        # -- SmartScreen --
         ss = _run_ps(
             '$r=Get-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer" '
             '-Name "SmartScreenEnabled" -ErrorAction SilentlyContinue;'
             'Write-Host $r.SmartScreenEnabled'
         )
-        status["smartscreen_on"] = ss.lower() in ("on", "requireadmin", "prompt")
+        on = ss.strip().lower() in ("on", "requireadmin", "prompt")
+        result["smartscreen"] = _item("ok" if on else "bad",
+                                      f"SmartScreen: {ss.strip() or '未知'}")
     except Exception:
         pass
 
+    # -- 内核隔离（内存完整性）--
     try:
-        # -- 内存完整性（内核隔离）--
         mi = _run_ps(
             '$d=Get-CimInstance -ClassName Win32_DeviceGuard '
             '-Namespace root\\Microsoft\\Windows\\DeviceGuard '
             '-ErrorAction SilentlyContinue;'
             'Write-Host $d.SecurityServicesRunning'
         )
-        status["memory_integrity"] = "HypervisorEnforcedCodeIntegrity" in mi
+        on = "HypervisorEnforcedCodeIntegrity" in mi
+        result["memory_integrity"] = _item("ok" if on else "warn",
+                                           "内核隔离（内存完整性）已开启" if on else "内核隔离（内存完整性）未开启")
     except Exception:
         pass
 
+    # -- 安全启动 --
     try:
-        # -- 安全启动 --
         sb = _run_ps('Confirm-SecureBootUEFI -ErrorAction SilentlyContinue; Write-Host $?')
-        status["secure_boot"] = "True" in sb
+        on = "True" in sb
+        result["secure_boot"] = _item("ok" if on else "warn",
+                                      "安全启动已启用（UEFI）" if on else "安全启动未启用")
     except Exception:
         pass
 
+    # -- 威胁计数 --
     try:
-        # -- 威胁计数 --
         tc = _run_ps(
             'try { $t=Get-MpThreat -ErrorAction Stop; Write-Host $t.Count } catch { Write-Host 0 }'
         )
-        status["threats_found"] = int(tc) if tc.isdigit() else 0
+        count = int(tc) if tc.strip().isdigit() else 0
+        if count == 0:
+            result["threats"] = _item("ok", "未发现活动威胁")
+        else:
+            result["threats"] = _item("bad", f"检测到 {count} 个威胁")
     except Exception:
         pass
 
-    # -- 计算安全评分 --
-    score = 0
-    if status["defender_enabled"]: score += 1
-    if status["real_time_protection"]: score += 1
-    if status["firewall_on"]: score += 1
-    if status["smartscreen_on"]: score += 1
-    if status["memory_integrity"]: score += 1
-    status["overall_score"] = score
+    # -- 评分（0-5）：ok 计 1 分，warn 计 0.5 分 --
+    score = 0.0
+    for k in ("defender", "firewall", "smartscreen", "memory_integrity", "secure_boot"):
+        if result[k]["status"] == "ok":
+            score += 1
+        elif result[k]["status"] == "warn":
+            score += 0.5
+    if result["threats"]["status"] == "bad":
+        score = max(0.0, score - 1)
+    result["overall_score"] = int(round(score))
 
-    return status
+    # 若全部项均为 unknown，则视为无法检测（离线/无权限）
+    if all(result[k]["status"] == "unknown" for k in
+           ("defender", "firewall", "smartscreen", "memory_integrity", "secure_boot", "threats")):
+        result["offline"] = True
+
+    return result
+
+
+@eel.expose
+def launch_defender_scan(quick=True):
+    """启动 Windows Defender 扫描（quick=True 快速扫描，False 全面扫描）"""
+    try:
+        scan_type = "QuickScan" if quick else "FullScan"
+        subprocess.run(
+            ['powershell', '-NoProfile', '-Command', f'Start-MpScan -ScanType {scan_type}'],
+            capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW
+        )
+        return {"success": True,
+                "message": "已启动 Defender 快速扫描" if quick else "已启动 Defender 全面扫描"}
+    except Exception as e:
+        return {"success": False, "message": f"启动扫描失败：{str(e)[:120]}"}
+
+
+@eel.expose
+def open_windows_security():
+    """打开 Windows 安全中心（ms-settings 深度链接，失败回退 explorer）"""
+    try:
+        os.startfile("ms-settings:windowsdefender")
+        return {"success": True, "message": "已打开 Windows 安全中心"}
+    except Exception:
+        pass
+    try:
+        subprocess.run(['explorer.exe', 'windowsdefender:'], creationflags=CREATE_NO_WINDOW)
+        return {"success": True, "message": "已打开 Windows 安全中心"}
+    except Exception as e:
+        return {"success": False, "message": f"打开失败：{str(e)[:120]}"}
 
 # ================== 启动 ==================
 import atexit

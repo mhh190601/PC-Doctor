@@ -1056,6 +1056,46 @@
             font-size: 14px;
         }
 
+        /* ========== 子工具下载中心卡片 ========== */
+        .subtool-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: transform .15s, box-shadow .15s, border-color .15s;
+        }
+        .subtool-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,.12);
+            border-color: var(--primary);
+        }
+        .subtool-head { display: flex; align-items: center; gap: 10px; }
+        .subtool-icon {
+            width: 38px; height: 38px; border-radius: 10px;
+            background: var(--primary-soft, #e0eaff);
+            color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            flex: 0 0 auto;
+        }
+        .dark-theme .subtool-icon { background: #1c2a4a; }
+        .subtool-name { font-size: 15px; font-weight: 600; color: var(--text); }
+        .subtool-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; min-height: 36px; }
+        .subtool-actions { margin-top: auto; }
+        .subtool-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .subtool-btn-icon { display: inline-flex; }
+        .subtool-progress { margin-top: 4px; }
+        .subtool-progress-bar {
+            height: 6px; background: var(--border); border-radius: 4px; overflow: hidden;
+        }
+        .subtool-progress-fill {
+            height: 100%; width: 0%; background: var(--primary); transition: width .3s;
+        }
+        .subtool-progress-label { font-size: 11px; color: var(--text-muted); }
+        .subtool-msg { font-size: 12px; color: var(--success); min-height: 16px; }
+
         /* 开关 */
         .switch {
             position: relative;
@@ -1715,6 +1755,10 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             设置
         </div>
+        <div class="tab-item" data-panel="security" onclick="switchPanel('security')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            安全
+        </div>
     </div>
 
     <!-- 主体 -->
@@ -1917,6 +1961,77 @@
                     </div>
                     </div>
 
+            <!-- 安全体检面板 -->
+            <div class="panel" id="panel-security">
+                <div class="security-head">
+                    <h3><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg> 🛡️ 安全体检</h3>
+                    <button class="btn-refresh" onclick="refreshSecurityStatus()">🔄 刷新</button>
+                </div>
+
+                <!-- 评分环 -->
+                <div class="security-score-wrap">
+                    <div class="score-ring">
+                        <svg width="140" height="140" viewBox="0 0 140 140">
+                            <circle class="score-bg" cx="70" cy="70" r="60" />
+                            <circle id="secScoreArc" class="score-arc" cx="70" cy="70" r="60" transform="rotate(-90 70 70)" />
+                        </svg>
+                        <div class="score-center">
+                            <div class="score-num" id="secScoreNum">--</div>
+                            <div class="score-sub">/ 5 安全评分</div>
+                        </div>
+                    </div>
+                    <div class="security-actions">
+                        <button class="btn-primary" onclick="openWindowsSecurity()">打开 Windows 安全中心</button>
+                        <button class="btn-secondary" onclick="launchQuickScan()">快速扫描</button>
+                        <button class="btn-secondary" onclick="launchFullScan()">全面扫描</button>
+                    </div>
+                </div>
+
+                <!-- 状态卡片网格 -->
+                <div class="security-grid" id="securityGrid">
+                    <div class="security-loading">正在检测安全状态…</div>
+                </div>
+
+                <style>
+                    #panel-security { padding: 16px 24px 32px; }
+                    .security-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+                    .security-head h3 { display:flex; align-items:center; gap:8px; font-size:20px; }
+                    .btn-refresh { background:var(--card-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; }
+                    .btn-refresh:hover { border-color:var(--accent); color:var(--accent); }
+                    .security-score-wrap { display:flex; align-items:center; gap:28px; flex-wrap:wrap; margin-bottom:24px; padding:16px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; }
+                    .score-ring { position:relative; width:140px; height:140px; }
+                    .score-bg { fill:none; stroke:var(--border); stroke-width:10; }
+                    .score-arc { fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round; stroke-dasharray:389; stroke-dashoffset:389; transition:stroke-dashoffset .6s ease, stroke .6s ease; }
+                    .score-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+                    #secScoreNum { font-size:42px; font-weight:700; color:var(--text); }
+                    .score-sub { font-size:12px; color:var(--text-muted); }
+                    .security-actions { display:flex; flex-direction:column; gap:10px; flex:1; min-width:200px; }
+                    .btn-primary { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:11px 16px; cursor:pointer; font-size:14px; font-weight:600; }
+                    .btn-primary:hover { opacity:.9; }
+                    .btn-secondary { background:var(--card-bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px 16px; cursor:pointer; font-size:14px; }
+                    .btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+                    .security-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+                    .security-card { display:flex; align-items:center; gap:14px; background:var(--card-bg); border:1px solid var(--border); border-left-width:5px; border-radius:12px; padding:16px; }
+                    .security-card.ok { border-left-color:#1a7f37; }
+                    .security-card.bad { border-left-color:#cf222e; }
+                    .security-card.warn { border-left-color:#bf8700; }
+                    .security-card.unknown { border-left-color:#8c959f; }
+                    .security-card-icon { flex:0 0 42px; width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#fff; background:#8c959f; }
+                    .security-card-icon.ok { background:#1a7f37; }
+                    .security-card-icon.bad { background:#cf222e; }
+                    .security-card-icon.warn { background:#bf8700; }
+                    .security-card-icon.unknown { background:#8c959f; }
+                    .security-card-info { flex:1; min-width:0; }
+                    .security-card-name { font-size:15px; font-weight:600; color:var(--text); margin-bottom:4px; }
+                    .security-card-status { font-size:13px; color:var(--text-secondary); word-break:break-word; }
+                    .security-card-status.ok { color:#1a7f37; }
+                    .security-card-status.bad { color:#cf222e; }
+                    .security-card-status.warn { color:#bf8700; }
+                    .security-card-status.unknown { color:#8c959f; }
+                    .security-loading { color:var(--text-muted); padding:24px; text-align:center; grid-column:1/-1; }
+                </style>
+            </div>
+
                     <!-- C盘救星面板 -->
                     <div class="panel" id="panel-cdisk">
         <h3 style="text-align:center; margin-bottom:10px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg> C盘救星</h3>
@@ -1932,6 +2047,14 @@
             </div>
             <div id="cdiskStatus" style="min-height:40px; color:var(--text-muted); font-size:13px; white-space:pre-wrap;"></div>
         </div>
+
+        <!-- 子工具下载中心（复用 C盘救星 下载安装框架） -->
+        <h3 style="text-align:center; margin:28px 0 6px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;"><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+            子工具下载中心
+        </h3>
+        <p style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:18px;">独立运行的轻量工具，下载后无需电脑医生主程序即可使用</p>
+        <div id="subtoolsGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; max-width:760px; margin:0 auto; padding:0 16px;"></div>
     </div>
     </div>
 
@@ -2152,6 +2275,164 @@
         }
     }
 
+    // ========== 子工具下载中心（隐私清理 / 启动项管理 / 文件粉碎机）==========
+    // 复用 C盘救星 的下载安装框架，泛型实现
+    const SUBTOOL_CARDS = [
+        { subkey: 'privacy_cleaner', name: '隐私清理', icon: 'iconPrivacy',
+          desc: '清理浏览器缓存、历史记录与系统临时文件，保护隐私', btnPrefix: 'pc' },
+        { subkey: 'startup_manager', name: '启动项管理', icon: 'iconStartup',
+          desc: '查看并禁用/启用开机启动程序，加快开机速度', btnPrefix: 'sm' },
+        { subkey: 'file_shredder', name: '文件粉碎机', icon: 'iconShredder',
+          desc: '多次覆写后彻底删除文件，无法恢复，适合隐私文件', btnPrefix: 'fs' },
+    ];
+    const SUBTOOL_STATE = {}; // subkey -> 'none' | 'downloading' | 'installed'
+
+    function subtool_card_html(t) {
+        return `
+        <div class="subtool-card" data-subkey="${t.subkey}">
+            <div class="subtool-head">
+                <span class="subtool-icon">${window[t.icon] ? window[t.icon]() : ''}</span>
+                <span class="subtool-name">${t.name}</span>
+            </div>
+            <div class="subtool-desc">${t.desc}</div>
+            <div class="subtool-actions">
+                <button class="btn-primary subtool-btn" id="${t.btnPrefix}Btn"
+                        onclick="handleSubtool('${t.subkey}')">
+                    <span class="subtool-btn-icon" id="${t.btnPrefix}BtnIcon">${CDISK_DOWNLOAD_ICON}</span>
+                    <span id="${t.btnPrefix}BtnText">一键下载</span>
+                </button>
+            </div>
+            <div class="subtool-progress" id="${t.btnPrefix}Progress" style="display:none;">
+                <div class="subtool-progress-bar"><div class="subtool-progress-fill" id="${t.btnPrefix}ProgressFill"></div></div>
+                <span class="subtool-progress-label" id="${t.btnPrefix}ProgressLabel">正在下载 0%</span>
+            </div>
+            <div class="subtool-msg" id="${t.btnPrefix}Msg"></div>
+        </div>`;
+    }
+
+    function renderSubtoolCards() {
+        const grid = document.getElementById('subtoolsGrid');
+        if (!grid) return;
+        grid.innerHTML = SUBTOOL_CARDS.map(subtool_card_html).join('');
+    }
+
+    async function initSubtools() {
+        renderSubtoolCards();
+        try {
+            const statusMap = await eel.list_subtools_status()();
+            SUBTOOL_CARDS.forEach(t => {
+                const st = (statusMap && statusMap[t.subkey]) ? 'installed' : 'none';
+                SUBTOOL_STATE[t.subkey] = st;
+                updateSubtoolUI(t);
+            });
+        } catch (e) {
+            console.error('[initSubtools] 初始化失败:', e);
+            SUBTOOL_CARDS.forEach(t => { SUBTOOL_STATE[t.subkey] = 'none'; updateSubtoolUI(t); });
+        }
+    }
+
+    function updateSubtoolUI(t) {
+        const st = SUBTOOL_STATE[t.subkey] || 'none';
+        const btn = document.getElementById(t.btnPrefix + 'Btn');
+        const btnText = document.getElementById(t.btnPrefix + 'BtnText');
+        const btnIcon = document.getElementById(t.btnPrefix + 'BtnIcon');
+        const progressDiv = document.getElementById(t.btnPrefix + 'Progress');
+        const msgDiv = document.getElementById(t.btnPrefix + 'Msg');
+        if (!btn) return;
+        if (msgDiv) msgDiv.textContent = '';
+        if (progressDiv) progressDiv.style.display = 'none';
+        btn.disabled = false;
+        btn.onclick = null;
+        if (st === 'installed') {
+            if (btnIcon) btnIcon.innerHTML = CDISK_PLAY_ICON;
+            btnText.textContent = '打开';
+            btn.onclick = () => openSubtool(t.subkey);
+        } else if (st === 'downloading') {
+            if (btnIcon) btnIcon.innerHTML = CDISK_DOWNLOAD_ICON;
+            btnText.textContent = '下载中...';
+            btn.disabled = true;
+        } else {
+            if (btnIcon) btnIcon.innerHTML = CDISK_DOWNLOAD_ICON;
+            btnText.textContent = '一键下载';
+            btn.onclick = () => handleSubtool(t.subkey);
+        }
+    }
+
+    async function handleSubtool(subkey) {
+        const t = SUBTOOL_CARDS.find(x => x.subkey === subkey);
+        if (!t) return;
+        if (SUBTOOL_STATE[subkey] === 'installed') { openSubtool(subkey); return; }
+        if (SUBTOOL_STATE[subkey] === 'downloading') return;
+
+        // 优先用内置资源安装，无需联网；仅在线下载时才检测网络
+        SUBTOOL_STATE[subkey] = 'downloading';
+        updateSubtoolUI(t);
+        const pc = document.getElementById(t.btnPrefix + 'Progress');
+        const fill = document.getElementById(t.btnPrefix + 'ProgressFill');
+        const label = document.getElementById(t.btnPrefix + 'ProgressLabel');
+        const pm = document.getElementById(t.btnPrefix + 'Msg');
+        if (pc) {
+            pc.style.display = 'block';
+            if (fill) { fill.style.width = '0%'; fill.classList.remove('indeterminate'); }
+            if (label) label.textContent = '正在安装 0%';
+        }
+        if (pm) pm.textContent = '';
+
+        // 本地安装时后端会一次性复制，这里用轮询确认完成
+        eel.install_subtool(subkey)();
+        const iv = setInterval(async () => {
+            try {
+                const progress = await eel.get_download_progress()();
+                if (progress.error) {
+                    clearInterval(iv);
+                    SUBTOOL_STATE[subkey] = 'none';
+                    updateSubtoolUI(t);
+                    if (pm) pm.textContent = '❌ ' + (progress.message || '安装失败，请重试');
+                    if (fill) fill.style.width = '0%';
+                    if (label) label.textContent = '';
+                    return;
+                }
+                if (fill && progress.percent) fill.style.width = progress.percent + '%';
+                if (label && progress.percent) label.textContent = '正在安装 ' + progress.percent + '%';
+                if (progress.percent >= 100) {
+                    clearInterval(iv);
+                    const installed = await eel.is_subtool_installed(subkey)();
+                    if (installed) {
+                        SUBTOOL_STATE[subkey] = 'installed';
+                        updateSubtoolUI(t);
+                        if (pm) pm.textContent = '✅ 安装完成，点击打开即可使用';
+                    } else {
+                        SUBTOOL_STATE[subkey] = 'none';
+                        updateSubtoolUI(t);
+                        if (pm) pm.textContent = '❌ 安装校验失败，请重试';
+                        if (fill) fill.style.width = '0%';
+                        if (label) label.textContent = '';
+                    }
+                }
+            } catch (e) {
+                clearInterval(iv);
+                SUBTOOL_STATE[subkey] = 'none';
+                updateSubtoolUI(t);
+                if (pm) pm.textContent = '❌ 通信异常，请重试';
+                if (fill) fill.style.width = '0%';
+                if (label) label.textContent = '';
+            }
+        }, 300);
+    }
+
+    async function openSubtool(subkey) {
+        try {
+            const res = await eel.launch_subtool(subkey)();
+            const t = SUBTOOL_CARDS.find(x => x.subkey === subkey);
+            if (!res || !res.success) {
+                const pm = document.getElementById(t.btnPrefix + 'Msg');
+                if (pm) pm.textContent = '❌ ' + ((res && res.message) || '打开失败');
+            }
+        } catch (e) {
+            console.error('[openSubtool] 异常:', e);
+        }
+    }
+
     // ========== 退出程序 ==========
     async function exitApp() {
         if (confirm('确定要退出电脑医生吗？')) {
@@ -2169,6 +2450,8 @@
         if (panel) panel.classList.add('active');
         if (panelName === 'tools') setTimeout(initCarousel, 100);
         if (panelName === 'settings') initSettings();
+        if (panelName === 'security') refreshSecurityStatus();
+        if (panelName === 'cdisk') { initAppStore(); initSubtools(); }
 
     }
 
@@ -4437,11 +4720,13 @@
             if (s === 'ok') totalScore += 1;
             else if (s === 'warn') totalScore += 0.5;
 
+            const iconChar = s === 'ok' ? '✓' : (s === 'bad' ? '✗' : (s === 'unknown' ? '?' : '!'));
+            const statusText = (s === 'unknown') ? (item.detail || '无法检测') : (label + (item.detail ? ' — ' + item.detail : ''));
             html += `<div class="security-card">
-                <div class="security-card-icon ${cls}">${info.icon}</div>
+                <div class="security-card-icon ${cls}">${iconChar}</div>
                 <div class="security-card-info">
                     <div class="security-card-name">${info.name}</div>
-                    <div class="security-card-status ${cls}">${label}${item.detail ? ' — ' + item.detail : ''}</div>
+                    <div class="security-card-status ${cls}">${statusText}</div>
                 </div>
             </div>`;
         });
