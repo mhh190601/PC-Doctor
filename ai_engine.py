@@ -361,13 +361,21 @@ class SemanticRetriever:
         except Exception as e:
             logger.debug(f"缓存保存失败: {e}")
 
-    def search(self, query: str, top_k: int = 3) -> list[dict]:
+    def search(self, query: str, top_k: int = 3,
+               candidate_ids: Optional[set] = None) -> list[dict]:
         """
         语义搜索（支持ONNX/PyTorch统一编码）
+
+        子任务1.3 第三层：混合检索的"语义检索"只在第二层标签过滤产出的
+        候选集(candidate_ids)内计算相似度，缩小范围、提升准确率与速度。
+
         返回: [{"id": 1, "question": "...", "answer": "...", "score": 0.92}, ...]
         """
         if not self._ready or self.embeddings is None:
             return []
+        # candidate_ids 为空集合等效于无候选集约束
+        if candidate_ids is not None and len(candidate_ids) == 0:
+            candidate_ids = None
         try:
             query_vec = self._encode([query])
             if query_vec is None:
@@ -376,6 +384,12 @@ class SemanticRetriever:
             # 按权重微调分数（范围 [0.1, 5.0]，允许差评有效降权）
             for i, doc in enumerate(self.documents):
                 similarity[i] *= max(0.1, min(5.0, doc.get("weight", 1.0)))
+            # 候选集约束：仅对标签过滤筛出的文档计算相似度排序
+            if candidate_ids is not None:
+                cand_set = set(candidate_ids)
+                for i, doc in enumerate(self.documents):
+                    if doc.get("id") not in cand_set:
+                        similarity[i] = -np.inf
             # 取 top_k
             indices = np.argsort(similarity)[::-1][:top_k]
             results = []
@@ -602,6 +616,7 @@ class TagMatcher:
     def __init__(self):
         self._ready = False
         self.documents = []      # list[dict]
+        self._tag_terms = set()  # 知识库所有标签词（含单字），用于子串补回
         try:
             import jieba
             self._jieba = jieba
@@ -627,6 +642,12 @@ class TagMatcher:
             if len(t) >= 2 or re.fullmatch(r"[a-z0-9]+", t):
                 if t not in self._stop:
                     cleaned.add(t)
+        # 子串补回：知识库中存在的单字标签（如"卡"）可能在 jieba 被切丢，
+        # 若它原样出现在用户输入中，则补回，避免单字标签永远匹配不到。
+        low = text  # text 已 lower
+        for term in self._tag_terms:
+            if term and term.lower() in low:
+                cleaned.add(term)
         return cleaned
 
     def build_index(self, knowledge_rows: list) -> bool:
@@ -650,7 +671,11 @@ class TagMatcher:
                 source = row[4] if len(row) > 4 else ""
                 tags = row[5] if len(row) > 5 else ""
                 severity = row[6] if len(row) > 6 else "中"
-            tag_list = [t.strip() for t in str(tags).replace("，", ",").split(",") if t.strip()]
+            if isinstance(tags, list):
+                tag_list = [str(t).strip() for t in tags if str(t).strip()]
+            else:
+                tag_list = [t.strip() for t in str(tags).replace("，", ",").split(",") if t.strip()]
+            self._tag_terms.update(tag_list)  # 收集所有标签词（含单字），供子串补回
             self.documents.append({
                 "id": d_id, "question": question, "answer": answer,
                 "weight": weight, "tags": tag_list, "source": source,
@@ -666,8 +691,11 @@ class TagMatcher:
         q_tokens = self._tokenize(query)
         if not q_tokens:
             return []
-        # 至少要有1个长度≥2的token（有实际语义），避免"1""a"等单字符误匹配
-        if not any(len(t) >= 2 for t in q_tokens):
+        # 至少要有1个有实际语义的token：长度≥2，或本身是知识库中的单字标签
+        has_meaning = any(len(t) >= 2 for t in q_tokens) or any(
+            t in self._tag_terms for t in q_tokens
+        )
+        if not has_meaning:
             return []
         results = []
         for doc in self.documents:
@@ -1689,66 +1717,78 @@ class AIEngine:
             _query_stats["exact_hits"] += 1
             return format_answer(exact)
 
-        # ---- 第1层（半精确）：标签匹配层（local/auto 模式）----
-        if mode in ("auto", "local"):
-            if self.tag_matcher.ready:
-                tag_results = self.tag_matcher.search(question, top_k=3)
-                if tag_results:
-                    best_tag = tag_results[0]
-                    if best_tag["score"] >= 0.5:
-                        logger.info(f"命中标签匹配({best_tag['score']:.3f})")
-                        _query_stats["tag_hits"] = _query_stats.get("tag_hits", 0) + 1
-                        raw = {
-                            "success": True,
-                            "answer": best_tag["answer"],
-                            "layer": "tag_match",
-                            "type": "tag",
-                            "score": best_tag["score"],
-                            "confidence": best_tag.get("confidence", self._confidence_label(best_tag["score"], "tag_match")),
-                            "source": best_tag.get("source", "电脑医生知识库"),
-                            "tags": best_tag.get("tags", ""),
-                            "severity": best_tag.get("severity", "中"),
-                            "knowledge_id": best_tag["id"],
-                            "matched_tags": best_tag.get("matched_tags", ""),
-                            "layer_label": "标签匹配",
-                            "candidates": tag_results[1:],
-                            "elapsed_ms": round((time.time() - t0) * 1000),
-                            "mode": mode,
-                        }
-                        return format_answer(raw)
+        # ---- 第1层（半精确）：标签过滤 → 产出候选集（local/auto 模式）----
+        # 子任务1.3：用 jieba 提取关键词，与知识库 tags 交集，得到候选集。
+        # 候选集同时用于：(a) 高置信标签直接返回；(b) 约束第2层语义检索范围。
+        candidate_ids = None
+        if mode in ("auto", "local") and self.tag_matcher.ready:
+            tag_results = self.tag_matcher.search(question, top_k=3)
+            if tag_results:
+                candidate_ids = {r["id"] for r in tag_results}
+                best_tag = tag_results[0]
+                if best_tag["score"] >= 0.5:
+                    logger.info(f"命中标签匹配({best_tag['score']:.3f})，候选集 {len(candidate_ids)} 条")
+                    _query_stats["tag_hits"] = _query_stats.get("tag_hits", 0) + 1
+                    raw = {
+                        "success": True,
+                        "answer": best_tag["answer"],
+                        "layer": "tag_match",
+                        "type": "tag",
+                        "score": best_tag["score"],
+                        "confidence": best_tag.get("confidence", self._confidence_label(best_tag["score"], "tag_match")),
+                        "source": best_tag.get("source", "电脑医生知识库"),
+                        "tags": best_tag.get("tags", ""),
+                        "severity": best_tag.get("severity", "中"),
+                        "knowledge_id": best_tag["id"],
+                        "matched_tags": best_tag.get("matched_tags", ""),
+                        "layer_label": "标签匹配",
+                        "candidates": tag_results[1:],
+                        "elapsed_ms": round((time.time() - t0) * 1000),
+                        "mode": mode,
+                    }
+                    return format_answer(raw)
 
-        # ---- 第2层：语义检索 / 关键词兜底（local/auto 模式）----
+        # ---- 第2层：语义检索（仅对第1层候选集）/ 关键词兜底（local/auto 模式）----
         semantic_hit = None
         if mode in ("auto", "local"):
-            retriever = self.semantic if self.semantic.ready else self.keyword
-            if retriever.ready:
-                results = retriever.search(question, top_k=3)
-                if results:
-                    best = results[0]
-                    layer_name = "semantic" if self.semantic.ready else "keyword"
-                    threshold = self.config["semantic"]["threshold"] if layer_name == "semantic" else 0.06
-                    if best["score"] >= threshold:
-                        logger.info(f"命中{layer_name}检索({best['score']:.3f}): {best.get('question', '')[:40]}")
-                        if layer_name == "semantic":
-                            _query_stats["semantic_hits"] += 1
-                        else:
-                            _query_stats["keyword_hits"] += 1
-                        semantic_hit = format_answer({
-                            "success": True,
-                            "answer": best["answer"],
-                            "layer": layer_name,
-                            "type": "semantic" if layer_name == "semantic" else "keyword",
-                            "score": best["score"],
-                            "confidence": best.get("confidence", self._confidence_label(best["score"], layer_name)),
-                            "source": best.get("source", "电脑医生知识库"),
-                            "tags": best.get("tags", ""),
-                            "severity": best.get("severity", "中"),
-                            "knowledge_id": best["id"],
-                            "layer_label": "语义检索" if layer_name == "semantic" else "关键词匹配",
-                            "candidates": results[1:],
-                            "elapsed_ms": round((time.time() - t0) * 1000),
-                            "mode": mode,
-                        })
+            if self.semantic.ready:
+                # 子任务1.3 第三层：语义检索只在候选集内计算相似度，提升准确率与速度
+                results = self.semantic.search(
+                    question, top_k=3,
+                    candidate_ids=candidate_ids if candidate_ids else None,
+                )
+            else:
+                results = None
+            if (not results) and self.keyword.ready:
+                # 模型不可用 → 关键词兜底（子任务1.1回退），关键词不做候选集约束
+                results = self.keyword.search(question, top_k=3)
+            if results:
+                best = results[0]
+                layer_name = "semantic" if self.semantic.ready else "keyword"
+                threshold = self.config["semantic"]["threshold"] if layer_name == "semantic" else 0.06
+                if best["score"] >= threshold:
+                    logger.info(f"命中{layer_name}检索({best['score']:.3f})"
+                                f"{f' 候选集{len(candidate_ids)}条' if candidate_ids else ''}: {best.get('question', '')[:40]}")
+                    if layer_name == "semantic":
+                        _query_stats["semantic_hits"] += 1
+                    else:
+                        _query_stats["keyword_hits"] += 1
+                    semantic_hit = format_answer({
+                        "success": True,
+                        "answer": best["answer"],
+                        "layer": layer_name,
+                        "type": "semantic" if layer_name == "semantic" else "keyword",
+                        "score": best["score"],
+                        "confidence": best.get("confidence", self._confidence_label(best["score"], layer_name)),
+                        "source": best.get("source", "电脑医生知识库"),
+                        "tags": best.get("tags", ""),
+                        "severity": best.get("severity", "中"),
+                        "knowledge_id": best["id"],
+                        "layer_label": "语义检索" if layer_name == "semantic" else "关键词匹配",
+                        "candidates": results[1:],
+                        "elapsed_ms": round((time.time() - t0) * 1000),
+                        "mode": mode,
+                    })
             # local 模式下，语义命中高置信度直接返回，否则走本地模型
             if mode == "local":
                 if semantic_hit:
