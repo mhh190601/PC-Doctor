@@ -1,0 +1,46 @@
+{
+  "model_name": "paraphrase-multilingual-MiniLM-L12-v2",
+  "api_key": "",
+  "provider": "zhipu",
+  "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+  "enable_online": true,
+  "local_threshold": 0.5,
+  "semantic": {
+    "enabled": true,
+    "model_name": "paraphrase-multilingual-MiniLM-L12-v2",
+    "threshold": 0.45,
+    "cache_dir": ".model_cache",
+    "max_results": 3,
+    "rebuild_on_start": false
+  },
+  "local_model": {
+    "enabled": false,
+    "provider": "ollama",
+    "model_name": "qwen2.5:0.5b",
+    "base_url": "http://localhost:11434",
+    "timeout": 30,
+    "max_tokens": 400,
+    "min_ram_gb": 6
+  },
+  "cloud": {
+    "enabled": true,
+    "provider": "zhipu",
+    "api_key": "",
+    "model_name": "glm-4-flash",
+    "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "timeout": 15,
+    "max_tokens": 600,
+    "temperature": 0.7
+  },
+  "learning": {
+    "auto_learn": true,
+    "feedback_weight_delta": 0.1,
+    "min_weight": 0.0,
+    "max_weight": 5.0,
+    "rebuild_interval_hours": 24
+  },
+  "hardware": {
+    "max_ram_percent": 60,
+    "prefer_gpu": true
+  }
+}

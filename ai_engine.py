@@ -101,27 +101,52 @@ DEFAULT_CONFIG = {
         "max_ram_percent": 60,      # 内存占用不超过此百分比
         "prefer_gpu": True,
     },
+    "enable_online": True,          # 是否允许联网（云端API / 联网搜索）
+    "local_threshold": 0.5,         # auto 模式：本地相似度低于此值才转云端联网
 }
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_config.json")
+# 配置文件优先级：config.json（用户主配置）> ai_config.json（兼容旧名）
+_CONFIG_CANDIDATES = (
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_config.json"),
+)
+
+
+def is_online(timeout: float = 3.0) -> bool:
+    """轻量网络探测：用于离线自动回退本地（任务2）"""
+    probes = ("https://www.baidu.com", "https://open.bigmodel.cn")
+    for url in probes:
+        try:
+            import urllib.request
+            req = urllib.request.Request(url, method="HEAD")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status < 500:
+                    return True
+        except Exception:
+            continue
+    return False
+
+CONFIG_PATH = None  # 运行时由 load_config 按优先级确定（config.json > ai_config.json）
 
 
 def load_config() -> dict:
-    """加载配置，不存在则用默认值"""
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            # 深度合并（简单版，只合并顶层 key）
-            merged = DEFAULT_CONFIG.copy()
-            for k, v in saved.items():
-                if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-                    merged[k].update(v)
-                else:
-                    merged[k] = v
-            return merged
-        except Exception:
-            pass
+    """加载配置，不存在则用默认值。任务2：优先读取 config.json，回退 ai_config.json"""
+    for candidate in _CONFIG_CANDIDATES:
+        if os.path.exists(candidate):
+            try:
+                # utf-8-sig 兼容带 BOM 的文件（部分编辑器会写入 BOM）
+                with open(candidate, "r", encoding="utf-8-sig") as f:
+                    saved = json.load(f)
+                # 深度合并（简单版，只合并顶层 key）
+                merged = DEFAULT_CONFIG.copy()
+                for k, v in saved.items():
+                    if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
+                        merged[k].update(v)
+                    else:
+                        merged[k] = v
+                return merged
+            except Exception:
+                continue
     return DEFAULT_CONFIG.copy()
 
 

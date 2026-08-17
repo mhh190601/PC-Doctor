@@ -436,9 +436,16 @@ def run_all_optimizations():
 # ================== 自学习AI诊断接口 ==================
 @eel.expose
 def ai_diagnose(problem_description, mode="auto"):
-    """智能诊断：使用 AI 引擎多层匹配（支持模式切换：auto/local/cloud/search）"""
-    from ai_engine import get_engine, format_answer, search as ai_search
-    from offtopic import is_pc_related, get_replier  # pyright: ignore[reportMissingImports]
+    """智能诊断：多模式切换（auto/local/cloud/search），纯本地优先、离线自动回退。
+
+    模式说明：
+      local  —— 仅本地检索（语义/标签/自学习+本地模型），完全离线
+      cloud  —— 仅云端 API（断网/禁用时自动回退本地并友好提示）
+      search —— 仅联网搜索（断网/禁用时自动回退本地）
+      auto   —— 本地优先，本地相似度低于 config.local_threshold 时转云端联网
+    """
+    from ai_engine import get_engine, format_answer, is_online
+    from offtopic import is_pc_related  # pyright: ignore[reportMissingImports]
     from empathy_engine import compose_reply, empathy_intro  # pyright: ignore[reportMissingImports]
 
     # 电脑问题 + 情绪同时出现 → 先共情再走正常诊断（不干扰诊断结果）
@@ -451,70 +458,100 @@ def ai_diagnose(problem_description, mode="auto"):
             diagnostic_result["answer"] = empathy_prefix + "\n\n" + diagnostic_result.get("answer", "")
         return _pack_ai_result(diagnostic_result)
 
-    # 非电脑相关问题 → 走高情商本地陪聊模块（方案A+，纯本地、零依赖、毫秒级）
-    if not is_pc_related(problem_description):
-        answer = compose_reply(problem_description)
-        result = format_answer({
-            "success": True,
-            "answer": answer,
-            "layer": "empathy",
-            "type": "empathy",
-            "score": 1.0,
-            "confidence": "high",
-            "source": "empathy",
-            "tags": "",
-            "severity": "低",
-            "layer_label": "轻松陪聊",
-        })
-        return _pack(result)
+    def _append_note(res: dict, note: str) -> dict:
+        """在答案末尾追加说明（不破坏原有字段）。"""
+        if not res:
+            return res
+        res = dict(res)
+        res["answer"] = (res.get("answer") or "") + "\n\n" + note
+        return res
 
-    # 第一阶段优化：优先语义检索（knowledge_base.json + SentenceTransformer，
-    # 模型懒加载、向量缓存 knowledge_vectors.npy）
-    semantic = ai_search(problem_description)
-    if semantic is not None:
-        answer, score = semantic
-        if score >= 0.5:  # 中/高置信度直接采用
+    def _friendly(reason: str) -> dict:
+        """统一友好提示封装（异常/禁用/失败均走这里，不向前端抛错误对象）。"""
+        return _pack_ai_result({
+            "success": False,
+            "answer": f"抱歉，暂时没法处理你的问题（{reason}）。你可以换种说法，或稍后再试。",
+            "layer": "error", "type": "error", "score": 0.0,
+            "confidence": "low", "source": "", "tags": "", "severity": "低",
+            "layer_label": "提示",
+        })
+
+    # 非电脑相关问题 → 走高情商本地陪聊模块（方案A+，纯本地、零依赖、毫秒级）
+    try:
+        if not is_pc_related(problem_description):
+            answer = compose_reply(problem_description)
             result = format_answer({
                 "success": True,
                 "answer": answer,
-                "layer": "semantic_search",
-                "type": "semantic",
-                "score": score,
-                "confidence": "high" if score >= 0.85 else "medium",
-                "source": "电脑医生知识库（语义检索）",
+                "layer": "empathy",
+                "type": "empathy",
+                "score": 1.0,
+                "confidence": "high",
+                "source": "empathy",
                 "tags": "",
-                "severity": "中",
-                "knowledge_id": None,
-                "layer_label": "语义检索",
-            })
-            return _pack(result)
-
-    # 回退 1：原自学习匹配
-    try:
-        match = learning.match_best_answer(problem_description)
-        if match and match.get("answer"):
-            result = format_answer({
-                "success": True,
-                "answer": match["answer"],
-                "layer": "learning_fallback",
-                "type": "learning",
-                "score": float(match.get("score", 0.0)),
-                "confidence": match.get("confidence", "medium"),
-                "source": match.get("source", "电脑医生知识库"),
-                "tags": match.get("tags", ""),
-                "severity": match.get("severity", "中"),
-                "knowledge_id": match.get("id"),
-                "layer_label": "自学习匹配",
+                "severity": "低",
+                "layer_label": "轻松陪聊",
             })
             return _pack(result)
     except Exception as e:
-        logger.error(f"自学习回退失败: {e}")
+        logger.error(f"陪聊分支异常: {e}")
 
-    # 回退 2：原多层引擎
-    engine = get_engine()
-    result = engine.ask(problem_description, mode=mode)
+    # 电脑问题：按模式分流
+    try:
+        engine = get_engine()
+        cfg = engine.config
+        enable_online = bool(cfg.get("enable_online", True))
+        local_threshold = float(cfg.get("local_threshold", 0.5))
 
-    return _pack_ai_result(result)
+        mode = (mode or "auto").lower()
+
+        # cloud：仅云端 API
+        if mode == "cloud":
+            if not enable_online:
+                return _friendly("云端模式已在 config.json 中禁用（enable_online=false）")
+            if not is_online():
+                # 断网 → 自动回退本地，不报联网错误
+                local_res = engine.ask(problem_description, mode="local")
+                return _pack(_append_note(local_res, "（检测到离线，已自动回退本地模式）"))
+            return _pack(engine.ask(problem_description, mode="cloud"))
+
+        # search：仅联网搜索
+        if mode == "search":
+            if not enable_online:
+                return _friendly("搜索模式已在 config.json 中禁用（enable_online=false）")
+            if not is_online():
+                local_res = engine.ask(problem_description, mode="local")
+                return _pack(_append_note(local_res, "（检测到离线，已自动回退本地模式）"))
+            return _pack(engine.ask(problem_description, mode="search"))
+
+        # local：仅本地检索
+        if mode == "local":
+            return _pack(engine.ask(problem_description, mode="local"))
+
+        # auto：本地优先，低于阈值转云端联网
+        local_res = engine.ask(problem_description, mode="local")
+        local_score = float(local_res.get("score", 0) or 0)
+        if local_res.get("success") and local_score >= local_threshold:
+            return _pack(local_res)
+        # 本地不足 → 尝试云端联网补充
+        if enable_online and is_online():
+            try:
+                cloud_res = engine.ask(problem_description, mode="cloud")
+                if cloud_res.get("success"):
+                    return _pack(_append_note(
+                        cloud_res,
+                        f"（本地匹配置信度 {local_score:.0%} 偏低，已自动转云端联网补充）",
+                    ))
+            except Exception as e:
+                logger.error(f"auto 转云端失败: {e}")
+        # 云端不可用 → 返回本地结果并提示
+        return _pack(_append_note(
+            local_res,
+            "（本地未能高置信匹配，且当前无法联网补充，建议换种说法或检查网络）",
+        ))
+    except Exception as e:
+        logger.error(f"ai_diagnose 异常: {e}")
+        return _friendly("系统处理出错，请稍后重试")
 
 
 def _pack_ai_result(result: dict) -> dict:
