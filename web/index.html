@@ -2639,12 +2639,14 @@
                 if (result.severity === '高') {
                     answerText = `<div style="margin-bottom:10px; padding:10px 14px; border-radius:8px; background:rgba(248,81,73,0.12); border-left:4px solid #f85149; color:#f85149; font-size:13px; font-weight:600;">`
                         + `⚠️ ${escapeHtml(result.risk_label || '高风险操作')} — 请提前备份重要数据</div>` + answerText;
-                } else if (result.risk_label && result.severity !== '低') {
-                    answerText = `<div style="margin-bottom:8px; padding:8px 12px; border-radius:6px; background:rgba(210,153,34,0.1); border-left:3px solid #d29922; color:#d29922; font-size:12px;">`
-                        + `ℹ️ ${escapeHtml(result.risk_label)}</div>` + answerText;
                 }
                 const msgDiv = addChatMessage(answerText, 'ai');
                 const bubble = msgDiv.querySelector('.msg-bubble');
+
+                // 轻松陪聊（offtopic）：纯文本气泡，不显示来源/置信度/复制按钮等诊断UI
+                if (result.source === 'offtopic' || result.source === 'empathy') {
+                    return;
+                }
 
                 // === 来源徽章：清晰区分自研AI vs 云端AI ===
                 if (result.source_type) {

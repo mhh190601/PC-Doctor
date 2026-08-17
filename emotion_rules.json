@@ -1,0 +1,79 @@
+{
+  "_comment": "情绪识别规则：纯本地、规则+关键词+表情。每种情绪含 triggers（带程度分级 weight）。emotion_analyzer 取权重最高的情绪，并按总权重定强度。匹配优先级：情绪词 > 电脑词 > 默认（有情绪词用情绪；无情绪词但有电脑词→neutral+涉及电脑；都没有→neutral+非电脑）。",
+  "priority": ["emotion", "pc_keyword", "default"],
+  "emotions": {
+    "anger": {
+      "label": "愤怒",
+      "triggers": [
+        {"kw": "烦死了", "weight": 3}, {"kw": "气死", "weight": 3}, {"kw": "气炸", "weight": 5},
+        {"kw": "无语", "weight": 2}, {"kw": "垃圾", "weight": 2}, {"kw": "想砸", "weight": 3},
+        {"kw": "烦", "weight": 1}, {"kw": "靠", "weight": 2}, {"kw": "可恶", "weight": 2},
+        {"kw": "什么破", "weight": 2}, {"kw": "烂", "weight": 1}, {"kw": "恨", "weight": 2},
+        {"kw": "💢", "weight": 2}, {"kw": "😡", "weight": 3}, {"kw": "🤬", "weight": 3}
+      ]
+    },
+    "sadness": {
+      "label": "沮丧",
+      "triggers": [
+        {"kw": "算了", "weight": 2}, {"kw": "没办法", "weight": 2}, {"kw": "绝望", "weight": 3},
+        {"kw": "放弃", "weight": 2}, {"kw": "救不了", "weight": 3}, {"kw": "没救", "weight": 2},
+        {"kw": "心累", "weight": 2}, {"kw": "崩溃了", "weight": 2}, {"kw": "哭", "weight": 2},
+        {"kw": "唉", "weight": 1}, {"kw": "😔", "weight": 2}, {"kw": "😞", "weight": 2},
+        {"kw": "😢", "weight": 2}, {"kw": "😭", "weight": 3}
+      ]
+    },
+    "anxiety": {
+      "label": "焦虑",
+      "triggers": [
+        {"kw": "来不及", "weight": 3}, {"kw": "赶时间", "weight": 3}, {"kw": "快点", "weight": 2},
+        {"kw": "急死", "weight": 3}, {"kw": "好急", "weight": 2}, {"kw": "着急", "weight": 2},
+        {"kw": "急着", "weight": 2}, {"kw": "赶紧", "weight": 2}, {"kw": "担心", "weight": 2},
+        {"kw": "怕来不及", "weight": 3}, {"kw": "紧张", "weight": 2},
+        {"kw": "😰", "weight": 2}, {"kw": "😨", "weight": 3}, {"kw": "😥", "weight": 2}
+      ]
+    },
+    "joy": {
+      "label": "开心",
+      "triggers": [
+        {"kw": "谢谢", "weight": 2}, {"kw": "太好了", "weight": 3}, {"kw": "搞定", "weight": 3},
+        {"kw": "终于", "weight": 1}, {"kw": "感谢", "weight": 2}, {"kw": "开心", "weight": 2},
+        {"kw": "棒", "weight": 2}, {"kw": "赞", "weight": 2}, {"kw": "好用", "weight": 1},
+        {"kw": "喜欢", "weight": 1}, {"kw": "😄", "weight": 2}, {"kw": "😊", "weight": 2},
+        {"kw": "😁", "weight": 2}, {"kw": "🎉", "weight": 3}
+      ]
+    },
+    "boredom": {
+      "label": "无聊",
+      "triggers": [
+        {"kw": "好无聊", "weight": 3}, {"kw": "无聊", "weight": 2}, {"kw": "在吗", "weight": 1},
+        {"kw": "有人吗", "weight": 1}, {"kw": "没意思", "weight": 2}, {"kw": "闲", "weight": 1},
+        {"kw": "陪我", "weight": 2}, {"kw": "发呆", "weight": 2}
+      ]
+    },
+    "complaint": {
+      "label": "抱怨",
+      "triggers": [
+        {"kw": "难用", "weight": 2}, {"kw": "不好用", "weight": 2}, {"kw": "垃圾", "weight": 2},
+        {"kw": "失望", "weight": 2}, {"kw": "废", "weight": 2}, {"kw": "差", "weight": 1},
+        {"kw": "烂", "weight": 1}, {"kw": "卡顿", "weight": 1}, {"kw": "崩溃", "weight": 1}
+      ]
+    }
+  },
+  "intensity_levels": {
+    "low": {"min_weight": 1, "label": "轻微"},
+    "mid": {"min_weight": 3, "label": "明显"},
+    "high": {"min_weight": 5, "label": "强烈"}
+  },
+  "pc_keywords": [
+    "电脑", "计算机", "笔记本", "台式", "系统", "windows", "win", "mac", "苹果",
+    "linux", "安卓", "软件", "硬件", "驱动", "显卡", "主板", "内存", "硬盘",
+    "cpu", "gpu", "电池", "网络", "wifi", "网线", "路由", "宽带", "上网", "断网",
+    "文件", "文件夹", "磁盘", "c盘", "d盘", "分区", "格式化", "u盘", "优盘",
+    "蓝屏", "死机", "黑屏", "卡顿", "卡死", "闪退", "崩溃", "重启", "关机", "开机",
+    "病毒", "木马", "杀毒", "防火墙", "弹窗", "广告", "清理", "加速", "优化",
+    "浏览器", "微信", "qq", "办公", "word", "excel", "ppt", "更新", "升级",
+    "密码", "账号", "登录", "蓝牙", "打印机", "摄像头", "麦克风", "音响", "耳机",
+    "游戏", "steam", "程序", "应用", "安装", "卸载", "报错", "错误码", "配置", "设置",
+    "键盘", "鼠标", "屏幕", "显示器", "电源", "充电", "发热", "风扇", "噪音", "温度"
+  ]
+}

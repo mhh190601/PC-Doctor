@@ -34,6 +34,11 @@ import ctypes
 from ctypes import windll, wintypes
 import learning  # 导入自学习模块
 
+# 确保模块所在目录在 sys.path，便于 Pylance 静态解析同目录模块（如 offtopic）
+_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _ROOT_DIR not in sys.path:
+    sys.path.insert(0, _ROOT_DIR)
+
 logger = logging.getLogger('pc_doctor')
 import stat
 
@@ -433,6 +438,35 @@ def run_all_optimizations():
 def ai_diagnose(problem_description, mode="auto"):
     """智能诊断：使用 AI 引擎多层匹配（支持模式切换：auto/local/cloud/search）"""
     from ai_engine import get_engine, format_answer, search as ai_search
+    from offtopic import is_pc_related, get_replier  # pyright: ignore[reportMissingImports]
+    from empathy_engine import compose_reply, empathy_intro  # pyright: ignore[reportMissingImports]
+
+    # 电脑问题 + 情绪同时出现 → 先共情再走正常诊断（不干扰诊断结果）
+    empathy_prefix = empathy_intro(problem_description)
+
+    def _pack(diagnostic_result: dict) -> dict:
+        """打包诊断结果，若含共情前缀则拼到答案最前（先共情后解决）。"""
+        if empathy_prefix:
+            diagnostic_result = dict(diagnostic_result)
+            diagnostic_result["answer"] = empathy_prefix + "\n\n" + diagnostic_result.get("answer", "")
+        return _pack_ai_result(diagnostic_result)
+
+    # 非电脑相关问题 → 走高情商本地陪聊模块（方案A+，纯本地、零依赖、毫秒级）
+    if not is_pc_related(problem_description):
+        answer = compose_reply(problem_description)
+        result = format_answer({
+            "success": True,
+            "answer": answer,
+            "layer": "empathy",
+            "type": "empathy",
+            "score": 1.0,
+            "confidence": "high",
+            "source": "empathy",
+            "tags": "",
+            "severity": "低",
+            "layer_label": "轻松陪聊",
+        })
+        return _pack(result)
 
     # 第一阶段优化：优先语义检索（knowledge_base.json + SentenceTransformer，
     # 模型懒加载、向量缓存 knowledge_vectors.npy）
@@ -453,7 +487,7 @@ def ai_diagnose(problem_description, mode="auto"):
                 "knowledge_id": None,
                 "layer_label": "语义检索",
             })
-            return _pack_ai_result(result)
+            return _pack(result)
 
     # 回退 1：原自学习匹配
     try:
@@ -472,42 +506,13 @@ def ai_diagnose(problem_description, mode="auto"):
                 "knowledge_id": match.get("id"),
                 "layer_label": "自学习匹配",
             })
-            return _pack_ai_result(result)
+            return _pack(result)
     except Exception as e:
         logger.error(f"自学习回退失败: {e}")
 
     # 回退 2：原多层引擎
     engine = get_engine()
     result = engine.ask(problem_description, mode=mode)
-
-    # 判断是否电脑问题（非电脑相关 + fallback → 友好提示）
-    if not result["success"] and result["layer"] == "fallback":
-        from ai_engine import AIEngine  # noqa
-        pc_keywords = [
-            '电脑', '计算机', '笔记本', '台式', '系统', 'windows', 'win',
-            '卡', '慢', '卡顿', '死机', '蓝屏', '黑屏', '花屏', '重启', '关机', '开机',
-            '内存', '硬盘', 'CPU', '显卡', '主板', '电源', '散热', '风扇', '驱动',
-            '网络', '上网', 'WiFi', 'wifi', '宽带', '路由', 'DNS', 'IP',
-            '病毒', '杀毒', '防火墙', '安全', '弹窗', '广告', '流氓', '软件',
-            'C盘', 'D盘', '磁盘', '空间', '清理', '优化', '卡死', '闪退', '崩溃', '报错',
-            '安装', '卸载', '更新', '升级', '浏览器', '输入法', '办公', '游戏',
-            '声音', '没声音', '画面', '鼠标', '键盘', '屏幕', '分辨率',
-            '0x', 'dll', '错误', '代码', '蓝屏代码', '风扇声音', '温度', '图标'
-        ]
-        if not any(kw in problem_description.lower() for kw in pc_keywords):
-            result = format_answer({
-                "success": True,
-                "answer": "👋 你好！我是电脑医生，只擅长回答电脑相关问题哦。\n\n请描述你的电脑遇到了什么问题，比如：\n• 电脑卡顿怎么办\n• C盘满了如何清理\n• 电脑蓝屏了怎么解决",
-                "layer": "greeting",
-                "type": "greeting",
-                "score": 1.0,
-                "confidence": "high",
-                "source": "电脑医生",
-                "tags": "",
-                "severity": "",
-                "layer_label": "友好提示",
-            })
-            return _pack_ai_result(result)
 
     return _pack_ai_result(result)
 
