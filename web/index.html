@@ -181,6 +181,17 @@
             height: 100%;
             background: #ffffff;
             z-index: 99999;
+        }
+        @media (prefers-color-scheme: dark) {
+            .splash-screen { background: #0d1117; }
+            .splash-title { color: #e6edf3; }
+            .splash-subtitle { color: #8b949e; }
+        }
+        .dark-theme .splash-screen {
+            background: #0d1117;
+        }
+        .dark-theme .splash-title { color: #e6edf3; }
+        .dark-theme .splash-subtitle { color: #8b949e; }
             display: flex;
             align-items: center;
             justify-content: center;
@@ -909,6 +920,16 @@
             flex-shrink: 0;
             margin-top: auto;
         }
+        /* 状态栏安全状态图标（任务7） */
+        .status-security { display:flex; align-items:center; gap:5px; font-weight:600; }
+        .sec-dot { font-size: 12px; line-height: 1; }
+        .sec-ok { color: #1a7f37; }
+        .sec-warn { color: #bf8700; }
+        .sec-bad { color: #cf222e; }
+        .sec-unknown { color: #8c959f; }
+        .dark-theme .sec-ok { color: #3fb950; }
+        .dark-theme .sec-warn { color: #d29922; }
+        .dark-theme .sec-bad { color: #f85149; }
         .status-item {
             display: flex;
             align-items: center;
@@ -1653,6 +1674,35 @@
         .dark-theme .net-card { background: #161b22 !important; border-color: #30363d !important; }
         .dark-theme .net-card:hover { background: #1c2129 !important; border-color: #58a6ff !important; }
         .dark-theme .privacy-card { background: #161b22 !important; border-color: #30363d !important; }
+
+        /* ===== 任务7：深色模式通用覆盖（消除内联白底残留）===== */
+        /* 覆盖内联白/浅色背景（不触碰红/黄/绿状态色） */
+        .dark-theme [style*="background:#fff" i],
+        .dark-theme [style*="background: #fff" i],
+        .dark-theme [style*="background:white" i],
+        .dark-theme [style*="background:#fafbfc" i],
+        .dark-theme [style*="background:#f0f4ff" i],
+        .dark-theme [style*="background:#f0f0f0" i],
+        .dark-theme [style*="background:#fff8c5" i] {
+            background-color: #161b22 !important;
+            border-color: #30363d !important;
+            color: #e6edf3 !important;
+        }
+        /* 下拉框 / 选项 */
+        .dark-theme select, .dark-theme option {
+            background-color: #161b22 !important;
+            color: #e6edf3 !important;
+            border-color: #30363d !important;
+        }
+        /* 弹窗内容 */
+        .dark-theme .modal-content,
+        .dark-theme .modal-body { background: #1c2128 !important; color: #e6edf3 !important; }
+        .dark-theme .modal-header { background: #161b22 !important; border-color: #30363d !important; }
+        .dark-theme .modal-title { color: #e6edf3 !important; }
+        /* 状态色容器在深色下降低饱和度但仍可辨识（保留语义色） */
+        .dark-theme [style*="#fff2f0" i], .dark-theme [style*="#fffbe6" i], .dark-theme [style*="#f0fff4" i] {
+            color: #e6edf3 !important;
+        }
     </style>
 </head>
 <body>
@@ -2060,6 +2110,10 @@
 
     <!-- 底部状态栏 -->
     <div class="status-bar">
+        <div class="status-item status-security" id="securityStatusItem" title="系统安全状态">
+            <span id="securityStatusIcon" class="sec-dot sec-unknown">●</span>
+            <span id="securityStatusText">安全: 检测中</span>
+        </div>
         <div class="status-item">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="4" y1="9" x2="1" y2="9"/><line x1="4" y1="15" x2="1" y2="15"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/></svg> <span id="cpuValue">--</span>%
             <progress class="cpu-bar" id="cpuBar" value="0" max="100"></progress>
@@ -2448,7 +2502,8 @@
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         var panel = document.getElementById('panel-' + panelName);
         if (panel) panel.classList.add('active');
-        if (panelName === 'tools') setTimeout(initCarousel, 100);
+        if (panelName === 'tools') { setTimeout(initCarousel, 100); setTimeout(() => window.startAutoRotate && window.startAutoRotate(), 200); }
+        else { window.stopAutoRotate && window.stopAutoRotate(); }
         if (panelName === 'settings') initSettings();
         if (panelName === 'security') refreshSecurityStatus();
         if (panelName === 'cdisk') { initAppStore(); initSubtools(); }
@@ -2494,6 +2549,38 @@
     }
     setInterval(updateStatus, 5000);
     updateStatus();
+
+    // ========== 状态栏安全状态图标（任务7）==========
+    async function updateSecurityStatusIcon() {
+        const icon = document.getElementById('securityStatusIcon');
+        const text = document.getElementById('securityStatusText');
+        if (!icon || !text) return;
+        try {
+            const sec = await eel.get_security_status()();
+            // 取最差状态：bad > warn > unknown > ok
+            const statuses = ['defender', 'firewall', 'smartscreen', 'memory_integrity', 'secure_boot', 'threats']
+                .map(k => (sec && sec[k] && sec[k].status) || '')
+                .filter(Boolean);
+            let level = 'unknown', label = '安全: 未知';
+            if (sec && sec.offline) {
+                level = 'unknown'; label = '安全: 离线';
+            } else if (statuses.includes('bad')) {
+                level = 'bad'; label = '安全: 风险';
+            } else if (statuses.includes('warn') || statuses.includes('unknown')) {
+                level = 'warn'; label = '安全: 注意';
+            } else if (statuses.length && statuses.every(s => s === 'ok')) {
+                level = 'ok'; label = '安全: 良好';
+            }
+            icon.className = 'sec-dot sec-' + level;
+            text.textContent = label;
+        } catch (e) {
+            icon.className = 'sec-dot sec-unknown';
+            text.textContent = '安全: 检测失败';
+        }
+    }
+    // 安全状态较重（涉及 PowerShell），降低刷新频率
+    setInterval(updateSecurityStatusIcon, 90000);
+    updateSecurityStatusIcon();
 
     // ========== 消息与结果展示辅助 ==========
     // showResult 已废弃，所有结果改用 showModal/updateModalContent 在弹窗中展示
@@ -4375,7 +4462,28 @@
             carouselAngle += e.deltaY * sensitivity * 0.1;
             updateCarouselRotation();
         }, { passive: false });
+
+        // ============ 任务7：3D木马自动轮播 + 悬停暂停 ============
+        carouselContainer.addEventListener('mouseenter', stopAutoRotate);
+        carouselContainer.addEventListener('mouseleave', startAutoRotate);
     }
+
+    // 自动轮播控制（全局，便于面板切换时统一启停）
+    window.__autoRotateTimer = null;
+    window.startAutoRotate = function () {
+        if (window.__autoRotateTimer) return;
+        // 每 80ms 平滑前进，约 12deg/步 实现柔和自转
+        window.__autoRotateTimer = setInterval(() => {
+            currentCarouselAngle += 0.6;
+            updateCarouselPositions(currentCarouselAngle);
+        }, 80);
+    };
+    window.stopAutoRotate = function () {
+        if (window.__autoRotateTimer) {
+            clearInterval(window.__autoRotateTimer);
+            window.__autoRotateTimer = null;
+        }
+    };
 
     // ==================== 管理员权限检测 ====================
     async function checkAdminStatus() {

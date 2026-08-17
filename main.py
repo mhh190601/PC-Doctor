@@ -34,6 +34,9 @@ import ctypes
 from ctypes import windll, wintypes
 import learning  # 导入自学习模块
 
+# 任务7：知识库加载就绪事件，用于启动加速（延迟加载，主窗口提前出现）
+kb_ready = threading.Event()
+
 # 确保模块所在目录在 sys.path，便于 Pylance 静态解析同目录模块（如 offtopic）
 _ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _ROOT_DIR not in sys.path:
@@ -447,6 +450,10 @@ def ai_diagnose(problem_description, mode="auto"):
     from ai_engine import get_engine, format_answer, is_online
     from offtopic import is_pc_related  # pyright: ignore[reportMissingImports]
     from empathy_engine import compose_reply, empathy_intro  # pyright: ignore[reportMissingImports]
+
+    # 任务7：确保后台知识库加载完成后再进行 AI 诊断（避免空库诊断）
+    if not kb_ready.is_set():
+        kb_ready.wait(timeout=30)
 
     # 电脑问题 + 情绪同时出现 → 先共情再走正常诊断（不干扰诊断结果）
     empathy_prefix = empathy_intro(problem_description)
@@ -3123,13 +3130,24 @@ if __name__ == '__main__':
     t = threading.Thread(target=start_monitor, daemon=True)
     t.start()
     
-    # 3. 如果知识库为空且存在JSON文件，自动导入（优先 v2 新格式）
-    if not learning.load_knowledge_data():
-        if os.path.exists(KB_V2_PATH):
-            learning.import_from_json(KB_V2_PATH)
-        elif os.path.exists(KB_PATH):
-            learning.import_from_json(KB_PATH)
-    
+    # 3. 延迟加载知识库：放入后台线程，主窗口（Eel）可提前出现，提升启动速度
+    def _load_knowledge_bg():
+        try:
+            # 如果知识库为空且存在JSON文件，自动导入（优先 v2 新格式）
+            if not learning.load_knowledge_data():
+                if os.path.exists(KB_V2_PATH):
+                    learning.import_from_json(KB_V2_PATH)
+                elif os.path.exists(KB_PATH):
+                    learning.import_from_json(KB_PATH)
+        except Exception as e:
+            print(f"[启动] 知识库后台加载异常: {e}")
+        finally:
+            kb_ready.set()
+    _kb_thread = threading.Thread(target=_load_knowledge_bg, daemon=True)
+    _kb_thread.start()
+    # 最多等待 5 秒，避免极端情况下主窗口被无限期阻塞
+    kb_ready.wait(timeout=5)
+
     # 4. 启动 Eel 主窗口
     import traceback
     for try_mode, try_name in [('chrome', 'Chrome'), ('edge', 'Edge'), (None, '默认浏览器')]:
